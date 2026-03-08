@@ -97,8 +97,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (credential?.accessToken) {
                 setGoogleAccessToken(credential.accessToken);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Sign in error:", error);
+            alert(`ログインエラー: ${error.message || "予期せぬエラーが発生しました"}`);
         }
     };
 
