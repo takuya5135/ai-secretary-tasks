@@ -18,6 +18,19 @@ export default function Home() {
     setIsSigningIn(false);
   };
 
+  // Firebase初期化エラーのチェック (auth が null の場合)
+  if (!loading && !user && typeof window !== "undefined" && !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <h1 className="text-xl font-bold text-gray-900 mb-2">設定エラー</h1>
+        <p className="text-gray-600 text-sm max-w-sm">
+          Firebaseの環境変数が設定されていません。Vercelのプロジェクト設定から API Key 等を登録してください。
+        </p>
+      </div>
+    );
+  }
+
   // ローディング画面
   if (loading || isSigningIn) {
     return (

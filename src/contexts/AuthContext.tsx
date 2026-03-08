@@ -38,6 +38,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
 
     useEffect(() => {
+        if (!auth || !db) {
+            setLoading(false);
+            console.warn("Firebase is not initialized. Environment variables might be missing.");
+            return;
+        }
+
         // ログイン状態の監視
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
@@ -78,6 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const signInWithGoogle = async () => {
+        if (!auth) return;
         const provider = new GoogleAuthProvider();
         // TasksとCalendarのAPIスコープを要求する (後々Geminiと連携するため)
         provider.addScope('https://www.googleapis.com/auth/tasks');
@@ -96,6 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const signOut = async () => {
+        if (!auth) return;
         try {
             await firebaseSignOut(auth);
             setGoogleAccessToken(null);
@@ -106,7 +114,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const updateProfile = async (data: Partial<UserProfile>) => {
-        if (!user) return false;
+        if (!user || !db) return false;
         try {
             const userRef = doc(db, "users", user.uid);
             const newProfile = { ...profile, ...data } as UserProfile;
