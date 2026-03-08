@@ -45,7 +45,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     // タスク追加処理
     const handleAddTask = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTaskTitle.trim() || !user || !googleAccessToken) return;
+        if (!newTaskTitle.trim() || !user || !googleAccessToken || !db) return;
         setIsSubmitting(true);
         try {
             // 1. Google Tasks に追加
@@ -68,15 +68,18 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
             const data = await res.json();
 
             // 2. Firestore にメタデータを追加
-            await setDoc(doc(db, "users", user.uid, "tasks_metadata", data.id), {
-                google_task_id: data.id,
-                place: activePlaceId,
-                importance: addImportance,
-                urgency: addUrgency,
-                is_routine: addIsRoutine,
-                routine_config: addRoutineConfig,
-                created_at: new Date().toISOString()
-            });
+            if (db) { // dbがnullでないことを確認
+                await setDoc(doc(db, "users", user.uid, "tasks_metadata", data.id), {
+                    google_task_id: data.id,
+                    place: activePlaceId,
+                    importance: addImportance,
+                    urgency: addUrgency,
+                    is_routine: addIsRoutine,
+                    routine_config: addRoutineConfig,
+                    created_at: new Date().toISOString()
+                });
+            }
+
 
             // 3. 成功したらリセット & リストをリロードする
             setNewTaskTitle("");
@@ -144,13 +147,15 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                 const gTask = await res.json();
 
                 // 2. Firestoreにメタデータを追加
-                await setDoc(doc(db, "users", user.uid, "tasks_metadata", gTask.id), {
-                    google_task_id: gTask.id,
-                    place: task.place,
-                    importance: task.importance,
-                    urgency: task.urgency,
-                    created_at: new Date().toISOString()
-                });
+                if (db) {
+                    await setDoc(doc(db, "users", user.uid, "tasks_metadata", gTask.id), {
+                        google_task_id: gTask.id,
+                        place: task.place,
+                        importance: task.importance,
+                        urgency: task.urgency,
+                        created_at: new Date().toISOString()
+                    });
+                }
             }
             setProposedTasks(null);
             setNewTaskTitle("");

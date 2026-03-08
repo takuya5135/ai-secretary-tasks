@@ -70,10 +70,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 const data = await res.json();
 
                 const metadataMap = new Map<string, TaskMetadata>();
-                if (user) {
+                if (user && db) {
                     const metadataSnapshot = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
-                    metadataSnapshot.forEach(doc => {
-                        metadataMap.set(doc.id, doc.data() as TaskMetadata);
+                    metadataSnapshot.forEach(docSnap => {
+                        metadataMap.set(docSnap.id, docSnap.data() as TaskMetadata);
                     });
                 }
 
@@ -123,15 +123,17 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 });
             }
 
-            await setDoc(doc(db, "users", user.uid, "tasks_metadata", editingTask.id), {
-                google_task_id: editingTask.id,
-                place: editingTask.place,
-                importance: editImportance,
-                urgency: editUrgency,
-                is_routine: editIsRoutine,
-                routine_config: editRoutineConfig,
-                updated_at: new Date().toISOString()
-            }, { merge: true });
+            if (db) {
+                await setDoc(doc(db, "users", user.uid, "tasks_metadata", editingTask.id), {
+                    google_task_id: editingTask.id,
+                    place: editingTask.place,
+                    importance: editImportance,
+                    urgency: editUrgency,
+                    is_routine: editIsRoutine,
+                    routine_config: editRoutineConfig,
+                    updated_at: new Date().toISOString()
+                }, { merge: true });
+            }
 
             setTasks(prev => prev.map(t =>
                 t.id === editingTask.id
