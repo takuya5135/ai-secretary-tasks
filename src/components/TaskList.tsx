@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { PlaceType } from "@/lib/constants";
-import { AppTask, GoogleTask, TaskMetadata } from "@/lib/types";
+import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import { Check, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2 } from "lucide-react";
-import { RoutineConfig } from "@/lib/types";
+import { PLACES, PlaceType } from "@/lib/constants";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -47,6 +46,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editIsRoutine, setEditIsRoutine] = useState(false);
     const [editRoutineConfig, setEditRoutineConfig] = useState<RoutineConfig>({ type: 'none' });
     const [editDueDate, setEditDueDate] = useState("");
+    const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
 
     const fetchTasks = async () => {
         if (!user || !googleAccessToken) {
@@ -122,11 +122,11 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     })
                 });
             }
-
             if (db) {
+                // place も含めて更新する
                 await setDoc(doc(db, "users", user.uid, "tasks_metadata", editingTask.id), {
                     google_task_id: editingTask.id,
-                    place: editingTask.place,
+                    place: editPlace,
                     importance: editImportance,
                     urgency: editUrgency,
                     is_routine: editIsRoutine,
@@ -137,9 +137,15 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             setTasks(prev => prev.map(t =>
                 t.id === editingTask.id
-                    ? { ...t, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
+                    ? { ...t, place: editPlace, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
                     : t
             ));
+
+            // 変更先のプレイスが現在開いているプレイスと異なる場合は、リストから外れるため再取得(またはState更新)することで即座に消える
+            if (editPlace !== place) {
+                setTasks(prev => prev.filter(t => t.id !== editingTask.id));
+            }
+
             // モーダルを閉じる
             setEditingTask(null);
         } catch (err: any) {
@@ -220,6 +226,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditIsRoutine(task.isRoutine || false);
         setEditRoutineConfig(task.routineConfig || { type: 'none' });
         setEditDueDate(task.dueDate ? task.dueDate.split('T')[0] : "");
+        setEditPlace(task.place);
     };
 
     const placeTasks = tasks.filter(t => t.status === "needsAction");
@@ -287,6 +294,22 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         <Trash2 className="w-5 h-5" />
                                         <span className="text-[8px] mt-1 font-bold">削除</span>
                                     </button>
+                                </section>
+
+                                {/* 所属プレイス設定 */}
+                                <section>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">所属タブ (Place)</label>
+                                    <select
+                                        value={editPlace}
+                                        onChange={(e) => setEditPlace(e.target.value as PlaceType)}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-4 px-4 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all appearance-none"
+                                    >
+                                        {PLACES.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </section>
 
                                 {/* 期限設定 */}
