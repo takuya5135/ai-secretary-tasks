@@ -7,8 +7,8 @@ import { PlaceType } from "@/lib/constants";
 import { AppTask, GoogleTask, TaskMetadata } from "@/lib/types";
 import { Check, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
-import { Zap, AlertCircle, Edit2, RotateCw, X, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2 } from "lucide-react";
 import { RoutineConfig } from "@/lib/types";
 
 // 重要度のラベルと色を返すヘルパー関数
@@ -48,59 +48,58 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editRoutineConfig, setEditRoutineConfig] = useState<RoutineConfig>({ type: 'none' });
     const [editDueDate, setEditDueDate] = useState("");
 
-    useEffect(() => {
-        if (!googleAccessToken) {
+    const fetchTasks = async () => {
+        if (!user || !googleAccessToken) {
             setLoading(false);
             return;
         }
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/tasks", {
+                headers: { Authorization: `Bearer ${googleAccessToken}` },
+            });
 
-        const fetchTasks = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch("/api/tasks", {
-                    headers: { Authorization: `Bearer ${googleAccessToken}` },
-                });
-
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(`エラー (${res.status}): ${errData.error || "API呼び出し失敗"}`);
-                }
-
-                const data = await res.json();
-
-                const metadataMap = new Map<string, TaskMetadata>();
-                if (user && db) {
-                    const metadataSnapshot = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
-                    metadataSnapshot.forEach(docSnap => {
-                        metadataMap.set(docSnap.id, docSnap.data() as TaskMetadata);
-                    });
-                }
-
-                const formattedTasks: AppTask[] = (data.tasks || []).map((t: GoogleTask) => {
-                    const meta = metadataMap.get(t.id);
-                    return {
-                        id: t.id,
-                        title: t.title,
-                        notes: t.notes,
-                        status: t.status,
-                        dueDate: t.due,
-                        place: meta?.place || "2nd",
-                        importance: meta?.importance || 2,
-                        urgency: meta?.urgency || 2,
-                        isRoutine: meta?.is_routine || false,
-                        routineConfig: meta?.routine_config || { type: 'none' },
-                    };
-                });
-
-                setTasks(formattedTasks.filter(t => t.place === place));
-            } catch (err: unknown) {
-                setError(err instanceof Error ? err.message : "タスクの取得に失敗しました");
-            } finally {
-                setLoading(false);
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(`エラー (${res.status}): ${errData.error || "API呼び出し失敗"}`);
             }
-        };
 
+            const data = await res.json();
+
+            const metadataMap = new Map<string, TaskMetadata>();
+            if (user && db) {
+                const metadataSnapshot = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
+                metadataSnapshot.forEach(docSnap => {
+                    metadataMap.set(docSnap.id, docSnap.data() as TaskMetadata);
+                });
+            }
+
+            const formattedTasks: AppTask[] = (data.tasks || []).map((t: GoogleTask) => {
+                const meta = metadataMap.get(t.id);
+                return {
+                    id: t.id,
+                    title: t.title,
+                    notes: t.notes,
+                    status: t.status,
+                    dueDate: t.due,
+                    place: meta?.place || "2nd",
+                    importance: meta?.importance || 2,
+                    urgency: meta?.urgency || 2,
+                    isRoutine: meta?.is_routine || false,
+                    routineConfig: meta?.routine_config || { type: 'none' },
+                };
+            });
+
+            setTasks(formattedTasks.filter(t => t.place === place));
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "タスクの取得に失敗しました");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchTasks();
     }, [googleAccessToken, user, place]);
 
@@ -140,10 +139,74 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     ? { ...t, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
                     : t
             ));
+            // モーダルを閉じる
             setEditingTask(null);
-        } catch (err) {
-            console.error("Update error:", err);
-            alert("更新に失敗しました");
+        } catch (err: any) {
+            console.error(err);
+            alert("タスクの更新に失敗しました");
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleCompleteTask = async (task: AppTask, e: React.MouseEvent) => {
+        e.stopPropagation(); // モーダルが開くのを防ぐ
+        if (!user || !googleAccessToken) return;
+
+        // UI上ですぐに消す（オプティミスティックUI）
+        setTasks(prev => prev.filter(t => t.id !== task.id));
+
+        try {
+            // Google Tasks APIで完了状態へ
+            const res = await fetch('/api/tasks', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${googleAccessToken}`
+                },
+                body: JSON.stringify({
+                    id: task.id,
+                    status: 'completed'
+                })
+            });
+
+            if (!res.ok) {
+                // エラーの場合は元に戻す
+                await fetchTasks();
+                alert("タスクの完了処理に失敗しました。");
+            }
+        } catch (error) {
+            console.error(error);
+            await fetchTasks();
+        }
+    };
+
+    const handleDeleteTask = async (taskId: string) => {
+        if (!user || !googleAccessToken) return;
+        if (!confirm("このタスクを完全に削除しますか？")) return;
+
+        setIsUpdating(true);
+        try {
+            const res = await fetch(`/api/tasks?id=${taskId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${googleAccessToken}`
+                }
+            });
+
+            if (!res.ok) throw new Error("Failed to delete task");
+
+            // Firestore のメタデータも削除
+            if (db) {
+                await deleteDoc(doc(db, "users", user.uid, "tasks_metadata", taskId));
+            }
+
+            // UIから削除
+            setTasks(prev => prev.filter(t => t.id !== taskId));
+            setEditingTask(null);
+        } catch (err: any) {
+            console.error(err);
+            alert("タスクの削除に失敗しました");
         } finally {
             setIsUpdating(false);
         }
@@ -166,9 +229,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
     return (
         <div className="space-y-3 pb-24">
             {placeTasks.map(task => (
-                <div key={task.id} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50 flex items-start gap-4 hover:shadow-md transition-shadow">
-                    <button className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors">
-                        <Check className="w-3 h-3 text-transparent hover:text-gray-400" />
+                <div key={task.id} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50 flex items-start gap-4 hover:shadow-md transition-shadow group">
+                    <button
+                        onClick={(e) => handleCompleteTask(task, e)}
+                        className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-green-50 hover:border-green-400 transition-colors"
+                    >
+                        <Check className="w-3 h-3 text-transparent group-hover:text-green-500 hover:text-green-600 transition-colors" />
                     </button>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEditModal(task)}>
                         <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
@@ -207,9 +273,19 @@ export default function TaskList({ place }: { place: PlaceType }) {
                             <button onClick={() => setEditingTask(null)} className="absolute right-6 top-8 p-2 text-gray-400 hover:bg-gray-100 rounded-full"><X /></button>
 
                             <div className="flex-1 overflow-y-auto space-y-8 pr-2">
-                                <section>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{editingTask.title}</h3>
-                                    <p className="text-xs text-gray-400">詳細設定を行います</p>
+                                <section className="flex items-start justify-between">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-gray-900 mb-2">{editingTask.title}</h3>
+                                        <p className="text-xs text-gray-400">詳細設定を行います</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteTask(editingTask.id)}
+                                        className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center"
+                                        title="タスクを削除"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                        <span className="text-[8px] mt-1 font-bold">削除</span>
+                                    </button>
                                 </section>
 
                                 {/* 期限設定 */}

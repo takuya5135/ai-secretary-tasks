@@ -93,3 +93,81 @@ export async function POST(request: Request) {
         );
     }
 }
+
+// Google Tasksを更新（完了・期限変更など）するエンドポイント
+export async function PATCH(request: Request) {
+    try {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const token = authHeader.split(" ")[1];
+
+        const body = await request.json();
+        const { id, title, notes, due, status } = body;
+
+        if (!id) {
+            return NextResponse.json({ error: "Missing task ID" }, { status: 400 });
+        }
+
+        const tasksClient = getGoogleTasksClient(token);
+        const taskLists = await tasksClient.tasklists.list();
+        const defaultList = taskLists.data.items?.[0];
+
+        if (!defaultList?.id) {
+            return NextResponse.json({ error: "Task list not found" }, { status: 404 });
+        }
+
+        const response = await tasksClient.tasks.patch({
+            tasklist: defaultList.id,
+            task: id,
+            requestBody: {
+                title,
+                notes,
+                due,
+                status // 'needsAction' or 'completed'
+            }
+        });
+
+        return NextResponse.json(response.data, { status: 200 });
+    } catch (error: unknown) {
+        console.error("PATCH /api/tasks error:", error);
+        return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
+    }
+}
+
+// Google Tasksを削除するエンドポイント
+export async function DELETE(request: Request) {
+    try {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const token = authHeader.split(" ")[1];
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+
+        if (!id) {
+            return NextResponse.json({ error: "Missing task ID" }, { status: 400 });
+        }
+
+        const tasksClient = getGoogleTasksClient(token);
+        const taskLists = await tasksClient.tasklists.list();
+        const defaultList = taskLists.data.items?.[0];
+
+        if (!defaultList?.id) {
+            return NextResponse.json({ error: "Task list not found" }, { status: 404 });
+        }
+
+        await tasksClient.tasks.delete({
+            tasklist: defaultList.id,
+            task: id,
+        });
+
+        return NextResponse.json({ success: true }, { status: 200 });
+    } catch (error: unknown) {
+        console.error("DELETE /api/tasks error:", error);
+        return NextResponse.json({ error: "Failed to delete task" }, { status: 500 });
+    }
+}
