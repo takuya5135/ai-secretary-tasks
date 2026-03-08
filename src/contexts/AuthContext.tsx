@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
 
-            if (currentUser) {
+            if (currentUser && db) {
                 // ユーザーがログインした時、Firestoreのusersコレクションを確認・作成
                 const userRef = doc(db, "users", currentUser.uid);
                 const userSnap = await getDoc(userRef);
