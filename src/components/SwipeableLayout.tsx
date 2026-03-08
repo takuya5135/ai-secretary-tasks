@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
-import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut } from "lucide-react";
 import TaskList from "./TaskList";
 import ChatBuddy from "./ChatBuddy";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ import { AIParsedTask } from "@/app/api/ai/parse-task/route";
 import { RoutineConfig } from "@/lib/types";
 
 export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () => void }) {
-    const { user, profile, googleAccessToken } = useAuth();
+    const { user, profile, googleAccessToken, signOut } = useAuth();
     const [activePlaceId, setActivePlaceId] = useState<PlaceType>("2nd");
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -32,6 +32,9 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
     // AI提案用のState
     const [proposedTasks, setProposedTasks] = useState<AIParsedTask[] | null>(null);
+
+    // ユーザーメニュー(ログアウト等)の開閉State
+    const [showUserMenu, setShowUserMenu] = useState(false);
 
     const activePlaceIndex = PLACES.findIndex(p => p.id === activePlaceId);
     const activePlace = PLACES[activePlaceIndex];
@@ -172,17 +175,63 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
         <div className={`flex flex-col h-[100dvh] w-full transition-colors duration-500 bg-gradient-to-br ${activePlace.color}`}>
 
             {/* 1. 上部タブナビゲーション */}
-            <header className="pt-12 pb-4 px-6 z-10">
+            <header className="pt-12 pb-4 px-6 z-10 relative">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Task Buddy</h1>
-                    <button
-                        onClick={onEditProfile}
-                        className="w-10 h-10 rounded-full bg-white/50 backdrop-blur-sm border border-white/50 shadow-sm flex items-center justify-center hover:bg-white/80 transition-colors active:scale-95"
-                    >
-                        <span className="text-lg">🤖</span>
-                    </button>
-                </div>
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowUserMenu(!showUserMenu)}
+                            className="w-10 h-10 rounded-full bg-white/50 backdrop-blur-sm border border-white/50 shadow-sm flex items-center justify-center hover:bg-white/80 transition-colors active:scale-95 overflow-hidden"
+                        >
+                            {user?.photoURL ? (
+                                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                                <User className="w-5 h-5 text-gray-600" />
+                            )}
+                        </button>
 
+                        <AnimatePresence>
+                            {showUserMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+                                    >
+                                        <div className="p-3 border-b border-gray-100">
+                                            <p className="text-sm font-bold text-gray-900 truncate">{profile?.nickname || user?.displayName || 'User'}</p>
+                                            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                                        </div>
+                                        <div className="p-2 space-y-1">
+                                            {onEditProfile && (
+                                                <button
+                                                    onClick={() => { setShowUserMenu(false); onEditProfile(); }}
+                                                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl flex items-center gap-2 transition-colors"
+                                                >
+                                                    <User className="w-4 h-4 text-gray-400" />
+                                                    プロフィールの設定
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={async () => {
+                                                    setShowUserMenu(false);
+                                                    await signOut();
+                                                    window.location.reload();
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl flex items-center gap-2 transition-colors"
+                                            >
+                                                <LogOut className="w-4 h-4 text-red-500" />
+                                                ログアウト
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
                 {/* 3 Place Tabs */}
                 <div className="flex bg-white/40 p-1.5 rounded-2xl backdrop-blur-md relative">
                     {PLACES.map((place) => {
