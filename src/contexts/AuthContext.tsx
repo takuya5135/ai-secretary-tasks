@@ -38,6 +38,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
 
     useEffect(() => {
+        // リロード時のために、localStorageからトークンを復元
+        if (typeof window !== "undefined") {
+            const savedToken = localStorage.getItem('googleAccessToken');
+            if (savedToken) {
+                setGoogleAccessToken(savedToken);
+            }
+        }
+
         if (!auth || !db) {
             setLoading(false);
             console.warn("Firebase is not initialized. Environment variables might be missing.");
@@ -75,6 +83,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setIsApproved(false);
                 setGoogleAccessToken(null);
                 setProfile(null);
+                if (typeof window !== "undefined") {
+                    localStorage.removeItem('googleAccessToken');
+                }
             }
 
             setLoading(false);
@@ -96,6 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const credential = GoogleAuthProvider.credentialFromResult(result);
             if (credential?.accessToken) {
                 setGoogleAccessToken(credential.accessToken);
+                localStorage.setItem('googleAccessToken', credential.accessToken);
             }
         } catch (error: any) {
             console.error("Sign in error:", error);
@@ -109,6 +121,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await firebaseSignOut(auth);
             setGoogleAccessToken(null);
             setProfile(null);
+            if (typeof window !== "undefined") {
+                localStorage.removeItem('googleAccessToken');
+            }
         } catch (error) {
             console.error("Sign out error:", error);
         }
