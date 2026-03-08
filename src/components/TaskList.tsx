@@ -62,7 +62,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
-                throw new Error(`エラー (${res.status}): ${errData.error || "API呼び出し失敗"}`);
+                console.error("API Error Response:", errData);
+                throw new Error(`エラー (${res.status}): ${JSON.stringify(errData)}`);
             }
 
             const data = await res.json();
