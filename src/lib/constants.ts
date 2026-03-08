@@ -1,6 +1,6 @@
-import { Home, Briefcase, Palette } from "lucide-react";
+import { Home, Briefcase, Palette, ShoppingCart } from "lucide-react";
 
-export type PlaceType = "1st" | "2nd" | "3rd";
+export type PlaceType = "1st" | "2nd" | "3rd" | "4th";
 
 export const PLACES = [
     {
@@ -29,5 +29,14 @@ export const PLACES = [
         color: "from-emerald-100 to-teal-50",
         textColor: "text-emerald-700",
         activeBg: "bg-emerald-500",
+    },
+    {
+        id: "4th" as PlaceType,
+        label: "Shopping",
+        description: "買い物・ウィッシュリスト",
+        icon: ShoppingCart,
+        color: "from-rose-100 to-pink-50",
+        textColor: "text-rose-700",
+        activeBg: "bg-rose-500",
     },
 ];

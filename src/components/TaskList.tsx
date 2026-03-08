@@ -34,9 +34,21 @@ const getUrgencyStyles = (u: number) => {
 };
 
 export default function TaskList({ place }: { place: PlaceType }) {
-    const { user, googleAccessToken } = useAuth();
-    const [tasks, setTasks] = useState<AppTask[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { user, googleAccessToken, googleRefreshToken } = useAuth();
+    const [tasks, setTasks] = useState<AppTask[]>(() => {
+        if (typeof window !== "undefined") {
+            const cached = localStorage.getItem(`cachedTasks_${place}`);
+            return cached ? JSON.parse(cached) : [];
+        }
+        return [];
+    });
+    // キャッシュがある場合はローディングを最初からスキップ（裏で更新）
+    const [loading, setLoading] = useState(() => {
+        if (typeof window !== "undefined") {
+            return !localStorage.getItem(`cachedTasks_${place}`);
+        }
+        return true;
+    });
     const [error, setError] = useState<string | null>(null);
     const [editingTask, setEditingTask] = useState<AppTask | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -50,15 +62,20 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
 
     const fetchTasks = async () => {
-        if (!user || !googleAccessToken) {
+        if (!user || (!googleAccessToken && !localStorage.getItem('googleRefreshToken'))) {
             setLoading(false);
             return;
         }
-        setLoading(true);
+        // キャッシュがない場合のみローディングスピナーを出す
+        if (tasks.length === 0) setLoading(true);
         setError(null);
         try {
+            const headers: Record<string, string> = {};
+            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
             const res = await fetch("/api/tasks", {
-                headers: { Authorization: `Bearer ${googleAccessToken}` },
+                headers,
             });
 
             if (!res.ok) {
@@ -93,7 +110,13 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 };
             });
 
-            setTasks(formattedTasks.filter(t => t.place === place));
+            const placeTasks = formattedTasks.filter(t => t.place === place);
+            setTasks(placeTasks);
+
+            // キャッシュを更新
+            if (typeof window !== "undefined") {
+                localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(placeTasks));
+            }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : "タスクの取得に失敗しました");
         } finally {
@@ -106,17 +129,20 @@ export default function TaskList({ place }: { place: PlaceType }) {
     }, [googleAccessToken, user, place]);
 
     const handleUpdateMetadata = async () => {
-        if (!user || !editingTask) return;
+        if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
         setIsUpdating(true);
         try {
             // Google Tasks の期限を更新 (変更がある場合)
             if (editDueDate !== (editingTask.dueDate ? editingTask.dueDate.split('T')[0] : "")) {
+                const headers: Record<string, string> = {
+                    "Content-Type": "application/json",
+                };
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
                 await fetch("/api/tasks", {
                     method: "PATCH", // または PUT。プロジェクトのAPI実装に合わせる
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${googleAccessToken}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         id: editingTask.id,
                         due: editDueDate ? new Date(editDueDate).toISOString() : null
@@ -136,15 +162,23 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 }, { merge: true });
             }
 
-            setTasks(prev => prev.map(t =>
-                t.id === editingTask.id
-                    ? { ...t, place: editPlace, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
-                    : t
-            ));
-
             // 変更先のプレイスが現在開いているプレイスと異なる場合は、リストから外れるため再取得(またはState更新)することで即座に消える
             if (editPlace !== place) {
-                setTasks(prev => prev.filter(t => t.id !== editingTask.id));
+                setTasks(prev => {
+                    const next = prev.filter(t => t.id !== editingTask.id);
+                    if (typeof window !== "undefined") localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(next));
+                    return next;
+                });
+            } else {
+                setTasks(prev => {
+                    const next = prev.map(t =>
+                        t.id === editingTask.id
+                            ? { ...t, place: editPlace, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
+                            : t
+                    );
+                    if (typeof window !== "undefined") localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(next));
+                    return next;
+                });
             }
 
             // モーダルを閉じる
@@ -159,7 +193,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
     const handleCompleteTask = async (task: AppTask, e: React.MouseEvent) => {
         e.stopPropagation(); // モーダルが開くのを防ぐ
-        if (!user || !googleAccessToken) return;
+        if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
         // UI上ですぐに消す（オプティミスティックUI）
         setTasks(prev => prev.filter(t => t.id !== task.id));
@@ -169,13 +203,16 @@ export default function TaskList({ place }: { place: PlaceType }) {
             if (task.isRoutine && task.routineConfig && task.routineConfig.type !== 'none') {
                 const nextDate = calculateNextRoutineDate(task.dueDate, task.routineConfig);
 
+                const headers: Record<string, string> = {
+                    "Content-Type": "application/json",
+                };
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
                 // 次のタスクをPOSTで作成
                 const createRes = await fetch("/api/tasks", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${googleAccessToken}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         title: task.title,
                         notes: task.notes,
@@ -203,13 +240,16 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 }
             }
 
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
             // Google Tasks APIで完了状態へ
             const res = await fetch('/api/tasks', {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${googleAccessToken}`
-                },
+                headers,
                 body: JSON.stringify({
                     id: task.id,
                     status: 'completed'
@@ -228,16 +268,18 @@ export default function TaskList({ place }: { place: PlaceType }) {
     };
 
     const handleDeleteTask = async (taskId: string) => {
-        if (!user || !googleAccessToken) return;
+        if (!user || (!googleAccessToken && !googleRefreshToken)) return;
         if (!confirm("このタスクを完全に削除しますか？")) return;
 
         setIsUpdating(true);
         try {
+            const headers: Record<string, string> = {};
+            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
             const res = await fetch(`/api/tasks?id=${taskId}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${googleAccessToken}`
-                }
+                headers
             });
 
             if (!res.ok) throw new Error("Failed to delete task");

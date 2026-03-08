@@ -4,15 +4,18 @@ import { getGoogleTasksClient } from "@/lib/google/tasks";
 // Google Tasksからタスク一覧を取得するAPIエンドポイント
 export async function GET(request: Request) {
     try {
-        // 1. AuthorizationヘッダーからBearerトークン（Google Access Token）を取得
+        // 1. AuthorizationヘッダーからBearerトークン（Google Access Token） または Refresh Tokenを取得
         const authHeader = request.headers.get("Authorization");
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return NextResponse.json({ error: "Unauthorized: Missing Google Access Token" }, { status: 401 });
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
+
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!token && !refreshTokenHeader) {
+            return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });
         }
-        const token = authHeader.split(" ")[1];
 
         // 2. Google Tasks クライアントの初期化
-        const tasksClient = getGoogleTasksClient(token);
+        const tasksClient = getGoogleTasksClient(token, refreshTokenHeader);
 
         // 3. まずデフォルトのTaskListIDを取得（または全タスクリストから一番上のものを取得）
         const taskLists = await tasksClient.tasklists.list();
@@ -52,10 +55,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const authHeader = request.headers.get("Authorization");
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return NextResponse.json({ error: "Unauthorized: Missing Google Access Token" }, { status: 401 });
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
+
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!token && !refreshTokenHeader) {
+            return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });
         }
-        const token = authHeader.split(" ")[1];
 
         const body = await request.json();
         const { title, notes, dueDate } = body;
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing title" }, { status: 400 });
         }
 
-        const tasksClient = getGoogleTasksClient(token);
+        const tasksClient = getGoogleTasksClient(token, refreshTokenHeader);
 
         // デフォルトのタスクリストを取得
         const taskLists = await tasksClient.tasklists.list();
@@ -98,10 +104,13 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
     try {
         const authHeader = request.headers.get("Authorization");
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
+
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!token && !refreshTokenHeader) {
+            return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });
         }
-        const token = authHeader.split(" ")[1];
 
         const body = await request.json();
         const { id, title, notes, due, status } = body;
@@ -110,7 +119,7 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: "Missing task ID" }, { status: 400 });
         }
 
-        const tasksClient = getGoogleTasksClient(token);
+        const tasksClient = getGoogleTasksClient(token, refreshTokenHeader);
         const taskLists = await tasksClient.tasklists.list();
         const defaultList = taskLists.data.items?.[0];
 
@@ -140,10 +149,13 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
     try {
         const authHeader = request.headers.get("Authorization");
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
+
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!token && !refreshTokenHeader) {
+            return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });
         }
-        const token = authHeader.split(" ")[1];
 
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
@@ -152,7 +164,7 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: "Missing task ID" }, { status: 400 });
         }
 
-        const tasksClient = getGoogleTasksClient(token);
+        const tasksClient = getGoogleTasksClient(token, refreshTokenHeader);
         const taskLists = await tasksClient.tasklists.list();
         const defaultList = taskLists.data.items?.[0];
 

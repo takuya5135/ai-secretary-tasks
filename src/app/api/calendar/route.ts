@@ -4,14 +4,23 @@ import { google } from "googleapis";
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
-        const accessToken = request.headers.get("Authorization")?.split(" ")[1];
+        const authHeader = request.headers.get("Authorization");
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
 
-        if (!accessToken) {
+        const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!accessToken && !refreshTokenHeader) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const auth = new google.auth.OAuth2();
-        auth.setCredentials({ access_token: accessToken });
+        const auth = new google.auth.OAuth2(
+            process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+        );
+        auth.setCredentials({
+            access_token: accessToken || undefined,
+            refresh_token: refreshTokenHeader || undefined
+        });
 
         const calendar = google.calendar({ version: "v3", auth });
 

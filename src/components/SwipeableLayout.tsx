@@ -13,7 +13,7 @@ import { AIParsedTask } from "@/app/api/ai/parse-task/route";
 import { RoutineConfig } from "@/lib/types";
 
 export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () => void }) {
-    const { user, profile, googleAccessToken, signOut } = useAuth();
+    const { user, profile, googleAccessToken, googleRefreshToken, signOut } = useAuth();
     const [activePlaceId, setActivePlaceId] = useState<PlaceType>("2nd");
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -48,16 +48,19 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     // タスク追加処理
     const handleAddTask = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTaskTitle.trim() || !user || !googleAccessToken || !db) return;
+        if (!newTaskTitle.trim() || !user || (!googleAccessToken && !googleRefreshToken) || !db) return;
         setIsSubmitting(true);
         try {
             // 1. Google Tasks に追加
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
             const res = await fetch("/api/tasks", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${googleAccessToken}`
-                },
+                headers,
                 body: JSON.stringify({
                     title: newTaskTitle,
                     due: addDueDate ? new Date(addDueDate).toISOString() : null
@@ -129,17 +132,20 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
     // AI提案を一括保存する処理
     const handleSaveProposedTasks = async () => {
-        if (!proposedTasks || !user || !googleAccessToken) return;
+        if (!proposedTasks || !user || (!googleAccessToken && !googleRefreshToken)) return;
         setIsSubmitting(true);
         try {
             for (const task of proposedTasks) {
                 // 1. Google Tasksに追加
+                const headers: Record<string, string> = {
+                    "Content-Type": "application/json",
+                };
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
                 const res = await fetch("/api/tasks", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${googleAccessToken}`
-                    },
+                    headers,
                     body: JSON.stringify({
                         title: task.title,
                         notes: task.notes,
@@ -253,10 +259,10 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
                     {/* アクティブなタブの背景アニメーション */}
                     <motion.div
-                        className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] rounded-xl shadow-md ${activePlace.activeBg}`}
+                        className={`absolute top-1.5 bottom-1.5 w-[calc(25%-4px)] rounded-xl shadow-md ${activePlace.activeBg}`}
                         initial={false}
                         animate={{
-                            x: `calc(${activePlaceIndex * 100}% + ${activePlaceIndex * 6}px)`
+                            x: `calc(${activePlaceIndex * 100}% + ${activePlaceIndex * 6.5}px)`
                         }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     />
@@ -476,9 +482,10 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                             <h4 className="font-bold text-gray-900 text-sm">{task.title}</h4>
                                             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${task.place === "1st" ? "bg-green-50 text-green-700 border-green-200" :
                                                 task.place === "2nd" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                                    "bg-purple-50 text-purple-700 border-purple-200"
+                                                    task.place === "3rd" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                                        "bg-rose-50 text-rose-700 border-rose-200"
                                                 }`}>
-                                                {task.place === "1st" ? "Home" : task.place === "2nd" ? "Work" : "Hobby"}
+                                                {task.place === "1st" ? "Home" : task.place === "2nd" ? "Work" : task.place === "3rd" ? "Hobby" : "Shopping"}
                                             </span>
                                         </div>
                                         {task.notes && <p className="text-xs text-gray-500 mt-1">{task.notes}</p>}

@@ -8,7 +8,7 @@ export type AIParsedTask = {
     dueDate?: string; // ISO 8601
     importance: number; // 1-4
     urgency: number; // 1-4
-    place: "1st" | "2nd" | "3rd";
+    place: "1st" | "2nd" | "3rd" | "4th";
 };
 
 export async function POST(request: Request) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 - dueDate: 期限（ISO 8601形式の文字列、yyyy-mm-ddThh:mm:00.000Z。明確な指定がなければ省略）
 - importance: 重要度 (1:低い, 2:中, 3:高い, 4:極めて高い)
 - urgency: 緊急度 (1:低い, 2:中, 3:高い, 4:極めて高い)
-- place: 実行場所・コンテキスト ("1st": 自宅/パーソナル, "2nd": 職場/学校, "3rd": 趣味/サードプレイス から最適と推測されるもの。デフォルトは "2nd")
+- place: 実行場所・コンテキスト ("1st": 自宅/パーソナル, "2nd": 職場/学校, "3rd": 趣味/サードプレイス, "4th": 買い物/ショッピング から最適と推測されるもの。デフォルトは "2nd")
 
 必ず配列形式のJSONのみを出力してください。Markdownのコードブロック記号（\`\`\`json など）は含めず、純粋なJSON配列の文字列として返してください。
 `;
