@@ -11,9 +11,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+const isConfigValid = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+
 // Next.js (SSR環境) で複数回初期化されるのを防ぐ
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
+// ビルド時（APIキー未設定）にエラーを投げないようガード
+const app = isConfigValid
+  ? (!getApps().length ? initializeApp(firebaseConfig) : getApp())
+  : ({} as any);
+
+const auth = isConfigValid ? getAuth(app) : ({} as any);
+const db = isConfigValid ? getFirestore(app) : ({} as any);
 
 export { app, auth, db };
