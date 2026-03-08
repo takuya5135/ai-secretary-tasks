@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2 } from "lucide-react";
 import { PLACES, PlaceType } from "@/lib/constants";
+import { calculateNextRoutineDate } from "@/lib/dateUtils";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -164,6 +165,44 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setTasks(prev => prev.filter(t => t.id !== task.id));
 
         try {
+            // ルーティンタスクの場合は、次回の期日を計算して新規タスクとして再作成（クローン）する
+            if (task.isRoutine && task.routineConfig && task.routineConfig.type !== 'none') {
+                const nextDate = calculateNextRoutineDate(task.dueDate, task.routineConfig);
+
+                // 次のタスクをPOSTで作成
+                const createRes = await fetch("/api/tasks", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${googleAccessToken}`
+                    },
+                    body: JSON.stringify({
+                        title: task.title,
+                        notes: task.notes,
+                        dueDate: nextDate ? nextDate.toISOString() : null
+                    })
+                });
+
+                if (createRes.ok) {
+                    const newTaskData = await createRes.json();
+
+                    // 新しいタスクのメタデータをFirestoreに保存
+                    if (db) {
+                        await setDoc(doc(db, "users", user.uid, "tasks_metadata", newTaskData.id), {
+                            google_task_id: newTaskData.id,
+                            place: task.place, // 元のプレイスを引き継ぐ
+                            importance: task.importance,     // 重要度を引き継ぐ
+                            urgency: task.urgency,           // 緊急度を引き継ぐ
+                            is_routine: task.isRoutine,
+                            routine_config: task.routineConfig,
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                } else {
+                    console.error("Failed to create next routine task");
+                }
+            }
+
             // Google Tasks APIで完了状態へ
             const res = await fetch('/api/tasks', {
                 method: 'PATCH',

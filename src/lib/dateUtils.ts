@@ -1,0 +1,58 @@
+import { RoutineConfig } from "./types";
+
+export function calculateNextRoutineDate(currentDueISO: string | undefined, config: RoutineConfig): Date {
+    const baseDate = currentDueISO ? new Date(currentDueISO) : new Date();
+    // 確実に今日より先にするための最低基準
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let nextDate = new Date(baseDate);
+    // 過去タスクを完了した際、次の期日が今日よりも前にならないように調整するため
+    if (nextDate < today) {
+        nextDate = new Date(today);
+    }
+
+    switch (config.type) {
+        case 'daily':
+            nextDate.setDate(nextDate.getDate() + 1);
+            break;
+        case 'weekly':
+            if (config.days && config.days.length > 0) {
+                const currentDayOfWeek = nextDate.getDay();
+                let addedDays = 0;
+                let found = false;
+                for (let i = 1; i <= 7; i++) {
+                    const checkDay = (currentDayOfWeek + i) % 7;
+                    if (config.days.includes(checkDay)) {
+                        addedDays = i;
+                        found = true;
+                        break;
+                    }
+                }
+                nextDate.setDate(nextDate.getDate() + (found ? addedDays : 7));
+            } else {
+                nextDate.setDate(nextDate.getDate() + 7); // 未設定時は単純に7日後
+            }
+            break;
+        case 'monthly_day':
+            nextDate.setMonth(nextDate.getMonth() + 1);
+            if (config.dayOfMonth) {
+                // 日付が存在しない月（2月30日など）を丸める簡易処理
+                nextDate.setDate(Math.min(config.dayOfMonth, new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()));
+            }
+            break;
+        case 'yearly':
+        case 'yearly_date':
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+            if (config.month) nextDate.setMonth(config.month - 1);
+            if (config.dayOfMonth) {
+                nextDate.setDate(Math.min(config.dayOfMonth, new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()));
+            }
+            break;
+        default:
+            nextDate.setDate(nextDate.getDate() + 1); // 安全のためのフォールバック
+            break;
+    }
+
+    return nextDate;
+}
