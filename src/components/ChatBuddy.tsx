@@ -21,7 +21,7 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     const [hasSummarized, setHasSummarized] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [useSpeech, setUseSpeech] = useState(true); // 自動読み上げ設定
+    const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
 
@@ -87,16 +87,41 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     }, [googleAccessToken, user, profile, hasSummarized]);
 
     // 音声読み上げ (TTS)
-    const speak = useCallback((text: string) => {
-        if (!useSpeech || typeof window === "undefined") return;
+    const speak = useCallback((text: string, index: number) => {
+        if (typeof window === "undefined") return;
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
+
+        // マークダウン記号や絵文字を削除して読み上げやすくする
+        const cleanText = text
+            .replace(/[#*`_~]/g, '') // マークダウン記号
+            .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, ''); // 絵文字
+
+        if (!cleanText.trim()) return;
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.lang = "ja-JP";
         utterance.rate = 1.1;
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
+        utterance.onstart = () => {
+            setIsSpeaking(true);
+            setSpeakingIndex(index);
+        };
+        utterance.onend = () => {
+            setIsSpeaking(false);
+            setSpeakingIndex(null);
+        };
+        utterance.onerror = () => {
+            setIsSpeaking(false);
+            setSpeakingIndex(null);
+        };
         window.speechSynthesis.speak(utterance);
-    }, [useSpeech]);
+    }, []);
+
+    const stopSpeaking = useCallback(() => {
+        if (typeof window === "undefined") return;
+        window.speechSynthesis.cancel();
+        setIsSpeaking(false);
+        setSpeakingIndex(null);
+    }, []);
 
     // 音声認識 (STT) のセットアップ
     useEffect(() => {
@@ -134,18 +159,12 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         }
     };
 
-    // メッセージが追加されたら下までスクロール & 自動読み上げ
+    // メッセージが追加されたら下までスクロール
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-
-        // 最後のメッセージがアシスタントの場合のみ読み上げ
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.role === "assistant" && hasSummarized) {
-            speak(lastMessage.content);
-        }
-    }, [messages, hasSummarized, speak]);
+    }, [messages, hasSummarized]);
 
     const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -252,15 +271,32 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                         animate={{ opacity: 1, y: 0 }}
                         className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                        <div className={`max-w-[85%] rounded-2xl p-4 text-sm shadow-sm ${m.role === "user"
+                        <div className={`max-w-[85%] rounded-2xl p-4 text-sm shadow-sm flex flex-col gap-2 ${m.role === "user"
                             ? "bg-blue-600 text-white rounded-tr-none"
                             : "bg-gray-100 text-gray-800 rounded-tl-none border border-gray-200"
                             }`}>
-                            <div className="flex items-center gap-2 mb-1 opacity-70">
-                                {m.role === "user" ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-                                <span className="text-[10px] font-bold uppercase tracking-widest">
-                                    {m.role === "user" ? "You" : "Buddy"}
-                                </span>
+                            <div className="flex items-center justify-between opacity-70">
+                                <div className="flex items-center gap-2">
+                                    {m.role === "user" ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                                        {m.role === "user" ? "You" : "Buddy"}
+                                    </span>
+                                </div>
+                                {m.role === "assistant" && (
+                                    <button
+                                        onClick={() => {
+                                            if (speakingIndex === i) {
+                                                stopSpeaking();
+                                            } else {
+                                                speak(m.content, i);
+                                            }
+                                        }}
+                                        className="p-1.5 hover:bg-black/5 rounded-full transition-colors active:scale-90"
+                                        title={speakingIndex === i ? "読み上げ停止" : "読み上げる"}
+                                    >
+                                        {speakingIndex === i ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                    </button>
+                                )}
                             </div>
                             <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
                         </div>
@@ -278,15 +314,6 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             {/* 入力エリア (ボイスファーストUI) */}
             <div className="p-4 px-6 shrink-0 bg-white space-y-3">
                 <div className="flex items-center gap-4">
-                    {/* 音声読み上げトグル */}
-                    <button
-                        onClick={() => setUseSpeech(!useSpeech)}
-                        className={`p-2 rounded-lg transition-colors ${useSpeech ? "text-blue-600 bg-blue-50" : "text-gray-400 bg-gray-50"}`}
-                        title={useSpeech ? "読み上げ中" : "ミュート中"}
-                    >
-                        {useSpeech ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                    </button>
-
                     <form
                         onSubmit={handleSend}
                         className="flex-1 flex items-center gap-3 bg-gray-100 rounded-full px-4 py-2 border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:bg-white transition-all"
