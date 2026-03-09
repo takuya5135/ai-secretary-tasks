@@ -126,15 +126,12 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         utterance.lang = "ja-JP";
         utterance.rate = 1.1;
         utterance.onstart = () => {
-            setIsSpeaking(true);
             setSpeakingIndex(index);
         };
         utterance.onend = () => {
-            setIsSpeaking(false);
             setSpeakingIndex(null);
         };
         utterance.onerror = () => {
-            setIsSpeaking(false);
             setSpeakingIndex(null);
         };
         window.speechSynthesis.speak(utterance);
@@ -143,7 +140,6 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     const stopSpeaking = useCallback(() => {
         if (typeof window === "undefined") return;
         window.speechSynthesis.cancel();
-        setIsSpeaking(false);
         setSpeakingIndex(null);
     }, []);
 
