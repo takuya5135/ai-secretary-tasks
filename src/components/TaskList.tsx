@@ -62,7 +62,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
 
     const fetchTasks = async () => {
-        if (!user || (!googleAccessToken && !localStorage.getItem('googleRefreshToken'))) {
+        if (!user || (!googleAccessToken && !googleRefreshToken)) {
             setLoading(false);
             return;
         }
@@ -124,9 +124,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         }
     };
 
-    useEffect(() => {
-        fetchTasks();
-    }, [googleAccessToken, user, place]);
+    useEffect(() => { fetchTasks(); }, [googleAccessToken, googleRefreshToken, user, place]);
 
     const handleUpdateMetadata = async () => {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
