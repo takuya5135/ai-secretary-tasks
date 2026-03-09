@@ -248,24 +248,23 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             <button
                                 key={place.id}
                                 onClick={() => handleTabClick(place.id)}
-                                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl z-10 transition-colors ${isActive ? "text-white" : "text-gray-500 hover:text-gray-700"
+                                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl relative transition-colors ${isActive ? "text-white" : "text-gray-500 hover:text-gray-700"
                                     }`}
                             >
-                                <Icon className="w-5 h-5 mb-1" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">{place.label}</span>
+                                {isActive && (
+                                    <motion.div
+                                        layoutId="activePlaceBg"
+                                        className={`absolute inset-0 rounded-xl shadow-md ${activePlace.activeBg}`}
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                )}
+                                <div className="relative z-10 flex flex-col items-center">
+                                    <Icon className="w-5 h-5 mb-1" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">{place.label}</span>
+                                </div>
                             </button>
                         );
                     })}
-
-                    {/* アクティブなタブの背景アニメーション */}
-                    <motion.div
-                        className={`absolute top-1.5 bottom-1.5 w-[calc(25%-4px)] rounded-xl shadow-md ${activePlace.activeBg}`}
-                        initial={false}
-                        animate={{
-                            x: `calc(${activePlaceIndex * 100}% + ${activePlaceIndex * 6.5}px)`
-                        }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
                 </div>
             </header>
 
