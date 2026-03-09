@@ -209,8 +209,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (credential?.accessToken) {
                 setGoogleAccessToken(credential.accessToken);
                 localStorage.setItem('googleAccessToken', credential.accessToken);
-                // 本当はここで code を貰って /api/auth/exchange に投げる必要がある。
-                // (今回は簡略化のため、まずはアクセストークンのみ保存。後続のAPI修正で考慮する)
+            }
+            if ((result as any)._tokenResponse?.refreshToken) {
+                const refreshToken = (result as any)._tokenResponse.refreshToken;
+                setGoogleRefreshToken(refreshToken);
+                localStorage.setItem('googleRefreshToken', refreshToken);
+
+                if (user && db) {
+                    const userRef = doc(db, "users", user.uid);
+                    await setDoc(userRef, { googleRefreshToken: refreshToken }, { merge: true });
+                }
             }
         } catch (error: any) {
             console.error("Google connect error:", error);
