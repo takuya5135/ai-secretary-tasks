@@ -235,7 +235,7 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     };
 
     return (
-        <div className={`fixed bottom-0 left-0 right-0 z-30 transition-all duration-300 ease-in-out ${isExpanded ? "h-[60vh]" : "h-24"} bg-white/90 backdrop-blur-xl border-t border-gray-200 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.1)] rounded-t-[2.5rem] flex flex-col overflow-hidden`}>
+        <div className={`fixed bottom-0 left-0 right-0 z-30 transition-all duration-300 ease-in-out ${isExpanded ? "h-[92dvh]" : "h-24"} bg-white/90 backdrop-blur-xl border-t border-gray-200 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.1)] rounded-t-[2.5rem] flex flex-col overflow-hidden`}>
             {/* ヘッダー/インジケーター */}
             <div
                 className="h-10 flex items-center justify-center cursor-pointer shrink-0 relative"
