@@ -8,6 +8,18 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { UserProfile } from "@/lib/types";
 
+declare global {
+    interface Window {
+        google?: {
+            accounts: {
+                oauth2: {
+                    initCodeClient: (config: any) => any;
+                }
+            }
+        }
+    }
+}
+
 interface AuthContextType {
     user: User | null;
     profile: UserProfile | null;
@@ -181,50 +193,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Google Tasks連携（初回のみ・リフレッシュトークン取得）
     const connectGoogleTasks = async () => {
         if (!auth || !user) return;
-        const provider = new GoogleAuthProvider();
 
-        provider.addScope('https://www.googleapis.com/auth/tasks');
-        provider.addScope('https://www.googleapis.com/auth/calendar');
-        provider.setCustomParameters({
-            prompt: 'consent',     // 毎回同意画面を出し、確実にリフレッシュトークンをもらう
-            access_type: 'offline' // リフレッシュトークンを要求
-        });
+        // Google Identity Services の初期化と呼び出し
+        if (typeof window !== "undefined" && window.google) {
+            const client = window.google.accounts.oauth2.initCodeClient({
+                client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+                scope: 'https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/calendar',
+                ux_mode: 'popup',
+                callback: async (response: any) => {
+                    if (response.error) {
+                        console.error('Consent error:', response.error);
+                        alert(`Google連携エラー: ${response.error}`);
+                        return;
+                    }
+                    if (response.code) {
+                        try {
+                            const res = await fetch("/api/auth/exchange", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ code: response.code })
+                            });
+                            if (!res.ok) throw new Error("Failed to exchange auth code");
+                            const data = await res.json();
 
-        try {
-            const result = await signInWithPopup(auth, provider);
-            // ※ Firebaseの signInWithPopup から直接はGoogle Refresh Tokenを取得できない（Server Auth Codeが必要）。
-            // そのため、credentialFromResult ではなく、OAuthの仕組みでコードをバックエンドに送り交換するフローが主流だが、
-            // Firebase Authの機能で連携するなら、バックエンドを用いずにAccessTokenだけキャッシュする旧方式に戻るか、
-            // または `firebase-admin` や Google Cloud 経由でリフレッシュトークンを扱うなどの工夫が必要。
-            // 今回は signInWithPopup が返す credential に含まれる authorizationCode（もしあれば）を利用するか、
-            // idToken をバックエンドに送り、バックエンドで取得するなどの方法になる。
-            // 
-            // （修正）: 現行のFirebase SDK (web) の signInWithPopup は、refresh_token を直接含みません。
-            // したがって /api/auth/exchange と連携するためには、OAuthの Authorization Code Flow を自作するか、Google Identity Services を利用する必要があります。
-            // ここでは簡易的に、フロントエンド側で Google Identity Services の SDK (gapi) 相当を利用するか、
-            // バックエンドへのリダイレクトで処理する必要があります。
-            //
-            // ★今回の仕様: 独自の `/auth/callback` リダイレクト画面を使わず、Googleの gsiライブラリを用いて authorization code を取得し、それをAPIに投げる。
-            // (簡易実装として、一旦アクセストークンを取得し localStorage に保存する旧フローも残しつつ、後で拡張可能にする)
-
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            if (credential?.accessToken) {
-                setGoogleAccessToken(credential.accessToken);
-                localStorage.setItem('googleAccessToken', credential.accessToken);
-            }
-            if ((result as any)._tokenResponse?.refreshToken) {
-                const refreshToken = (result as any)._tokenResponse.refreshToken;
-                setGoogleRefreshToken(refreshToken);
-                localStorage.setItem('googleRefreshToken', refreshToken);
-
-                if (user && db) {
-                    const userRef = doc(db, "users", user.uid);
-                    await setDoc(userRef, { googleRefreshToken: refreshToken }, { merge: true });
-                }
-            }
-        } catch (error: any) {
-            console.error("Google connect error:", error);
-            alert(`Google連携エラー: ${error.message}`);
+                            if (data.access_token) {
+                                setGoogleAccessToken(data.access_token);
+                                localStorage.setItem('googleAccessToken', data.access_token);
+                            }
+                            if (data.refresh_token) {
+                                setGoogleRefreshToken(data.refresh_token);
+                                localStorage.setItem('googleRefreshToken', data.refresh_token);
+                                if (user && db) {
+                                    const userRef = doc(db, "users", user.uid);
+                                    await setDoc(userRef, { googleRefreshToken: data.refresh_token }, { merge: true });
+                                }
+                            }
+                            // 画面更新を促す
+                            window.location.reload();
+                        } catch (err: any) {
+                            console.error("Exchange error:", err);
+                            alert(`トークン交換エラー: ${err.message}`);
+                        }
+                    }
+                },
+            });
+            client.requestCode();
+        } else {
+            console.error("Google Identity Services script not loaded.");
+            alert("Google認証スクリプトが読み込めていません。リロードしてください。");
         }
     }
 
