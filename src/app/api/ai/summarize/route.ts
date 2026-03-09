@@ -11,11 +11,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Gemini API Key is not configured" }, { status: 500 });
         }
 
+        // 現在の日時を取得
+        const now = new Date();
+        const currentDateStr = now.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+
         const ai = new GoogleGenerativeAI(apiKey);
         const model = ai.getGenerativeModel({
             model: "gemini-2.0-flash",
             systemInstruction: `
 あなたは優秀な秘書「バディ」です。ユーザーのタスクとカレンダー予定を分析し、要約レポートを作成してください。
+現在の日付: ${currentDateStr}
 ユーザープロフィール: ${JSON.stringify(userProfile || {})}
 
 要件:
