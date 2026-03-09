@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
+import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { UserProfile } from "@/lib/types";
@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return null;
     });
     const [loading, setLoading] = useState(false); // 初期値falseにして即座にUI表示
+    const [isFirestoreLoaded, setIsFirestoreLoaded] = useState(false);
     const [isApproved, setIsApproved] = useState(() => {
         if (typeof window !== "undefined") {
             const cachedApproved = localStorage.getItem("cachedUserApproved");
@@ -82,6 +83,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
+        // モバイルでリロードしてもセッションが維持されるよう明示的に宣言
+        setPersistence(auth, browserLocalPersistence).catch(console.error);
+
         // ログイン状態の監視
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
@@ -108,6 +112,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         localStorage.removeItem('googleRefreshToken');
                         console.log('FirestoreにgoogleRefreshTokenが無い');
                     }
+
+                    // Stateへのセットだけでなく、確実にキャッシュもローカル変数から即時更新する
+                    localStorage.setItem("cachedUserApproved", String(approved));
+                    if (userProfile) {
+                        localStorage.setItem("cachedUserProfile", JSON.stringify(userProfile));
+                    } else {
+                        localStorage.removeItem("cachedUserProfile");
+                    }
                 } else {
                     // 初回ログイン時はusersドキュメントを作成 (デフォルトは未承認)
                     await setDoc(userRef, {
@@ -121,25 +133,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setIsApproved(false);
                     setProfile(null);
                     setGoogleRefreshToken(null);
+
+                    localStorage.setItem("cachedUserApproved", "false");
+                    localStorage.removeItem("cachedUserProfile");
+                    localStorage.removeItem("googleRefreshToken");
                 }
 
-                // 最新状態をキャッシュ（次回起動用）
-                localStorage.setItem("cachedUserApproved", String(isApproved)); // Use the state variable
-                if (profile) { // Use the state variable
-                    localStorage.setItem("cachedUserProfile", JSON.stringify(profile));
-                } else {
-                    localStorage.removeItem("cachedUserProfile");
-                }
-                if (googleRefreshToken) { // Use the state variable
-                    localStorage.setItem('googleRefreshToken', googleRefreshToken);
-                } else {
-                    localStorage.removeItem('googleRefreshToken');
-                }
+                setIsFirestoreLoaded(true);
             } else {
                 setIsApproved(false);
                 setGoogleAccessToken(null);
                 setGoogleRefreshToken(null);
                 setProfile(null);
+                setIsFirestoreLoaded(true);
                 if (typeof window !== "undefined") {
                     localStorage.removeItem("googleAccessToken");
                     localStorage.removeItem("googleRefreshToken");
@@ -168,11 +174,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // ユーザーがログインした後、リフレッシュトークンが無い場合は自動でGoogle Tasks連携を試みる
     useEffect(() => {
-        if (user && !googleRefreshToken) {
-            console.log('ユーザーがログインしましたがリフレッシュトークンが無いため、connectGoogleTasks を呼び出します');
+        if (user && isFirestoreLoaded && !googleRefreshToken) {
+            console.log('ユーザーがログインし、Firestoreロード完了後もリフレッシュトークンが無いため、connectGoogleTasks を呼び出します');
             connectGoogleTasks();
         }
-    }, [user, googleRefreshToken]);
+    }, [user, googleRefreshToken, isFirestoreLoaded]);
 
     // Google Tasks連携（初回のみ・リフレッシュトークン取得）
     const connectGoogleTasks = async () => {

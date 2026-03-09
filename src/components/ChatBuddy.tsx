@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 type Message = {
@@ -24,6 +24,26 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     const [useSpeech, setUseSpeech] = useState(true); // 自動読み上げ設定
     const scrollRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
+
+    // 日付が変わったらチャットをリセットする処理
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                const today = new Date().toLocaleDateString();
+                const lastUsed = localStorage.getItem('chat_last_used_date');
+                if (lastUsed && lastUsed !== today) {
+                    setMessages([{ role: "assistant", content: "おはようございます！新しい一日ですね。今日も一日サポートいたします。" }]);
+                    setHasSummarized(false); // 新日のため要約を再生成
+                }
+                localStorage.setItem('chat_last_used_date', today);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        handleVisibilityChange(); // 初回マウント時にも実行
+
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     // 起動時の要約生成
     useEffect(() => {
@@ -177,10 +197,24 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         <div className={`fixed bottom-0 left-0 right-0 z-30 transition-all duration-300 ease-in-out ${isExpanded ? "h-[60vh]" : "h-24"} bg-white/90 backdrop-blur-xl border-t border-gray-200 shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.1)] rounded-t-[2.5rem] flex flex-col overflow-hidden`}>
             {/* ヘッダー/インジケーター */}
             <div
-                className="h-10 flex items-center justify-center cursor-pointer shrink-0"
+                className="h-10 flex items-center justify-center cursor-pointer shrink-0 relative"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="w-12 h-1.5 bg-gray-200 rounded-full mb-1" />
+
+                {isExpanded && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setMessages([{ role: "assistant", content: "チャット履歴をクリアしました。何か他にお手伝いしましょうか？" }]);
+                        }}
+                        className="absolute left-6 text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="履歴をクリア"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                )}
+
                 {isExpanded ? <ChevronDown className="absolute right-6 w-5 h-5 text-gray-400" /> : <ChevronUp className="absolute right-6 w-5 h-5 text-gray-400" />}
             </div>
 
