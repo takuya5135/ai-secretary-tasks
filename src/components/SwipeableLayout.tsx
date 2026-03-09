@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
 import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut } from "lucide-react";
@@ -11,6 +11,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AIParsedTask } from "@/app/api/ai/parse-task/route";
 import { RoutineConfig } from "@/lib/types";
+import { useSync } from "@/hooks/useSync";
 
 export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () => void }) {
     const { user, profile, googleAccessToken, googleRefreshToken, signOut } = useAuth();
@@ -22,6 +23,14 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     const [newTaskTitle, setNewTaskTitle] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showDetails, setShowDetails] = useState(false); // 詳細設定の開閉
+
+    // データ同期用フック
+    const { syncData, isSyncing } = useSync();
+
+    // 初回マウント時＋認証情報変更時にバックグラウンドで最新データをFirebaseへ同期
+    useEffect(() => {
+        syncData();
+    }, [syncData]);
 
     // 詳細設定用State
     const [addImportance, setAddImportance] = useState(2);
@@ -98,6 +107,9 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
             setAddIsRoutine(false);
             setAddRoutineConfig({ type: 'none' });
             setRefreshKey(prev => prev + 1);
+
+            // Googleに追加した新規タスクをFirestoreキャッシュにも即座に反映
+            await syncData();
         } catch (error) {
             console.error("Task add error:", error);
             alert("タスクの追加に失敗しました。詳細をご確認ください。");
@@ -170,6 +182,9 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
             setNewTaskTitle("");
             setIsAddingTask(false);
             setRefreshKey(prev => prev + 1);
+
+            // Googleに追加した新規タスクをFirestoreキャッシュにも即座に反映
+            await syncData();
         } catch (error) {
             console.error("Bulk Save Error:", error);
         } finally {

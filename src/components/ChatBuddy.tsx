@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 
 type Message = {
     role: "user" | "assistant";
@@ -50,31 +53,43 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         if (googleAccessToken && user && !hasSummarized) {
             const fetchSummary = async () => {
                 try {
-                    // 1. タスクとカレンダーの取得
-                    const headers: Record<string, string> = {};
-                    if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-                    if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+                    if (!db) return;
 
-                    const [tasksRes, calRes] = await Promise.all([
-                        fetch("/api/tasks", { headers }),
-                        fetch("/api/calendar", { headers })
-                    ]);
-
-                    const tasksData = await tasksRes.json();
-                    const calData = await calRes.json();
-
-                    // カレンダーイベントをローカルストレージにキャッシュする（追加）
-                    if (calData?.events && typeof window !== "undefined") {
-                        localStorage.setItem('cachedCalendarEvents', JSON.stringify(calData.events));
+                    // 1. Firestore から直近のキャッシュを取得
+                    const calDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "calendar"));
+                    let calData = [];
+                    if (calDoc.exists()) {
+                        calData = calDoc.data().events || [];
                     }
+
+                    const tasksDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "tasks"));
+                    let tasksData = [];
+                    if (tasksDoc.exists()) {
+                        const googleTasks = tasksDoc.data().items || [];
+                        const metaSnap = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
+                        const metadataMap = new Map();
+                        metaSnap.forEach(snap => metadataMap.set(snap.id, snap.data()));
+
+                        tasksData = googleTasks.map((t: any) => {
+                            const meta = metadataMap.get(t.id);
+                            return {
+                                ...t,
+                                place: meta?.place || "2nd",
+                                importance: meta?.importance || 2,
+                                urgency: meta?.urgency || 2
+                            };
+                        });
+                    }
+
+                    // キャッシュが空の場合は同期を待つか、今回はあるものだけで要約する方針（最悪0件で「今日の予定はありません」となる）
 
                     // 2. 要約の生成
                     const sumRes = await fetch("/api/ai/summarize", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            tasks: tasksData.tasks,
-                            calendarEvents: calData.events,
+                            tasks: tasksData,
+                            calendarEvents: calData,
                             userProfile: profile
                         })
                     });
@@ -191,17 +206,32 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             let calCache = [];
 
             try {
-                const calData = localStorage.getItem('cachedCalendarEvents');
-                if (calData) calCache = JSON.parse(calData);
+                if (user && db) {
+                    const calDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "calendar"));
+                    if (calDoc.exists()) {
+                        calCache = calDoc.data().events || [];
+                    }
 
-                // タスクはプレイスごとに分かれているので結合する
-                const taskPlaces = ["1st", "2nd", "3rd", "4th"];
-                for (const place of taskPlaces) {
-                    const placeData = localStorage.getItem(`cachedTasks_${place}`);
-                    if (placeData) tasksCache.push(...JSON.parse(placeData));
+                    const tasksDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "tasks"));
+                    if (tasksDoc.exists()) {
+                        const googleTasks = tasksDoc.data().items || [];
+                        const metaSnap = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
+                        const metadataMap = new Map();
+                        metaSnap.forEach(snap => metadataMap.set(snap.id, snap.data()));
+
+                        tasksCache = googleTasks.map((t: any) => {
+                            const meta = metadataMap.get(t.id);
+                            return {
+                                ...t,
+                                place: meta?.place || "2nd",
+                                importance: meta?.importance || 2,
+                                urgency: meta?.urgency || 2
+                            };
+                        });
+                    }
                 }
             } catch (e) {
-                console.warn("Failed to read cache for AI context", e);
+                console.warn("Failed to read context from Firestore for AI Chat", e);
             }
 
             const res = await fetch("/api/ai/chat", {

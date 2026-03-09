@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,10 +7,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import { Check, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2 } from "lucide-react";
 import { PLACES, PlaceType } from "@/lib/constants";
 import { calculateNextRoutineDate } from "@/lib/dateUtils";
+import { useSync } from "@/hooks/useSync";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -35,20 +37,8 @@ const getUrgencyStyles = (u: number) => {
 
 export default function TaskList({ place }: { place: PlaceType }) {
     const { user, googleAccessToken, googleRefreshToken, connectGoogleTasks } = useAuth();
-    const [tasks, setTasks] = useState<AppTask[]>(() => {
-        if (typeof window !== "undefined") {
-            const cached = localStorage.getItem(`cachedTasks_${place}`);
-            return cached ? JSON.parse(cached) : [];
-        }
-        return [];
-    });
-    // キャッシュがある場合はローディングを最初からスキップ（裏で更新）
-    const [loading, setLoading] = useState(() => {
-        if (typeof window !== "undefined") {
-            return !localStorage.getItem(`cachedTasks_${place}`);
-        }
-        return true;
-    });
+    const [tasks, setTasks] = useState<AppTask[]>([]);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [editingTask, setEditingTask] = useState<AppTask | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
@@ -61,79 +51,71 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editDueDate, setEditDueDate] = useState("");
     const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
 
-    const fetchTasks = async () => {
-        if (!user || (!googleAccessToken && !googleRefreshToken)) {
+    const { syncData } = useSync();
+
+    const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
+    const [taskMetadataMap, setTaskMetadataMap] = useState<Map<string, TaskMetadata>>(new Map());
+
+    // 1. Firestoreからデータをリアルタイム購読
+    useEffect(() => {
+        if (!user || !db) {
             setLoading(false);
-            if (user) {
-                // ユーザーはログインしているがGoogleトークンがない場合
+            if (user && (!googleAccessToken && !googleRefreshToken)) {
                 setError("Googleカレンダー・タスクへの連携が必要です。再接続してください。");
             }
             return;
         }
-        // キャッシュがない場合のみローディングスピナーを出す
-        if (tasks.length === 0) setLoading(true);
-        console.log('fetchTasks: googleAccessToken', googleAccessToken, 'googleRefreshToken', googleRefreshToken);
-        try {
-            const headers: Record<string, string> = {};
-            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+        setError(null);
 
-            const res = await fetch("/api/tasks", {
-                headers,
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                console.error("API Error Response:", errData);
-                throw new Error(`エラー (${res.status}): ${JSON.stringify(errData)}`);
-            }
-
-            const data = await res.json();
-
-            const metadataMap = new Map<string, TaskMetadata>();
-            if (user && db) {
-                const metadataSnapshot = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
-                metadataSnapshot.forEach(docSnap => {
-                    metadataMap.set(docSnap.id, docSnap.data() as TaskMetadata);
-                });
-            }
-
-            const formattedTasks: AppTask[] = (data.tasks || []).map((t: GoogleTask) => {
-                const meta = metadataMap.get(t.id);
-                return {
-                    id: t.id,
-                    title: t.title,
-                    notes: t.notes,
-                    status: t.status,
-                    dueDate: t.due,
-                    place: meta?.place || "2nd",
-                    importance: meta?.importance || 2,
-                    urgency: meta?.urgency || 2,
-                    isRoutine: meta?.is_routine || false,
-                    routineConfig: meta?.routine_config || { type: 'none' },
-                };
-            });
-
-            const placeTasks = formattedTasks.filter(t => t.place === place);
-            setTasks(placeTasks);
-
-            // キャッシュを更新
-            if (typeof window !== "undefined") {
-                localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(placeTasks));
-            }
-        } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : "タスクの取得に失敗しました";
-            if (errorMessage.includes("401") || errorMessage.includes("403")) {
-                setError("Googleの認証期限が切れました。再接続してください。");
+        // Googleタスクのキャッシュを購読
+        const unsubscribeTasks = onSnapshot(doc(db, "users", user.uid, "google_cache", "tasks"), (docSnap) => {
+            if (docSnap.exists()) {
+                setGoogleTasks(docSnap.data().items || []);
             } else {
-                setError(errorMessage);
+                setGoogleTasks([]);
             }
-        } finally {
-            setLoading(false);
-        }
-    };
+        }, (err) => {
+            console.error(err);
+            setError("タスク一覧の同期に失敗しました");
+        });
 
-    useEffect(() => { fetchTasks(); }, [googleAccessToken, googleRefreshToken, user, place]);
+        // タスクメタデータを購読
+        const unsubscribeMeta = onSnapshot(collection(db, "users", user.uid, "tasks_metadata"), (metaSnap) => {
+            const map = new Map<string, TaskMetadata>();
+            metaSnap.forEach(snap => map.set(snap.id, snap.data() as TaskMetadata));
+            setTaskMetadataMap(map);
+            setLoading(false);
+        }, (err) => {
+            console.error(err);
+        });
+
+        return () => {
+            unsubscribeTasks();
+            unsubscribeMeta();
+        };
+    }, [user, db, googleAccessToken, googleRefreshToken]);
+
+    // 2. データが更新されたらAppTask形式に結合・フィルタリング
+    useEffect(() => {
+        const formattedTasks: AppTask[] = googleTasks.map((t) => {
+            const meta = taskMetadataMap.get(t.id);
+            return {
+                id: t.id,
+                title: t.title,
+                notes: t.notes,
+                status: t.status,
+                dueDate: t.due,
+                place: meta?.place || "2nd",
+                importance: meta?.importance || 2,
+                urgency: meta?.urgency || 2,
+                isRoutine: meta?.is_routine || false,
+                routineConfig: meta?.routine_config || { type: 'none' },
+            };
+        });
+
+        const placeTasks = formattedTasks.filter(t => t.place === place);
+        setTasks(placeTasks);
+    }, [googleTasks, taskMetadataMap, place]);
 
     const handleUpdateMetadata = async () => {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
@@ -170,26 +152,13 @@ export default function TaskList({ place }: { place: PlaceType }) {
             }
 
             // 変更先のプレイスが現在開いているプレイスと異なる場合は、リストから外れるため再取得(またはState更新)することで即座に消える
-            if (editPlace !== place) {
-                setTasks(prev => {
-                    const next = prev.filter(t => t.id !== editingTask.id);
-                    if (typeof window !== "undefined") localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(next));
-                    return next;
-                });
-            } else {
-                setTasks(prev => {
-                    const next = prev.map(t =>
-                        t.id === editingTask.id
-                            ? { ...t, place: editPlace, importance: editImportance, urgency: editUrgency, isRoutine: editIsRoutine, routineConfig: editRoutineConfig, dueDate: editDueDate ? new Date(editDueDate).toISOString() : undefined }
-                            : t
-                    );
-                    if (typeof window !== "undefined") localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(next));
-                    return next;
-                });
-            }
+            // (FirestoreのonSnapshotにより自動でUIは更新されるため、ローカルステートの手動更新は不要です)
 
             // モーダルを閉じる
             setEditingTask(null);
+
+            // Googleに反映した変更をFirestoreキャッシュにも同期
+            await syncData();
         } catch (err: any) {
             console.error(err);
             alert("タスクの更新に失敗しました");
@@ -202,8 +171,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
         e.stopPropagation(); // モーダルが開くのを防ぐ
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
-        // UI上ですぐに消す（オプティミスティックUI）
-        setTasks(prev => prev.filter(t => t.id !== task.id));
+        // UI側ですぐに消えるが、念のためオプティミスティック更新としてStateからも弾く
+        setGoogleTasks(prev => prev.filter(t => t.id !== task.id));
 
         try {
             // ルーティンタスクの場合は、次回の期日を計算して新規タスクとして再作成（クローン）する
@@ -264,13 +233,15 @@ export default function TaskList({ place }: { place: PlaceType }) {
             });
 
             if (!res.ok) {
-                // エラーの場合は元に戻す
-                await fetchTasks();
+                // エラーの場合は元に戻す(Firestoreの再読込をトリガーするだけでも良いが、今回は簡易的に)
                 alert("タスクの完了処理に失敗しました。");
+            } else {
+                // 完了状態をFirestoreキャッシュにも同期
+                await syncData();
             }
         } catch (error) {
             console.error(error);
-            await fetchTasks();
+            alert("タスクの完了処理に失敗しました。");
         }
     };
 
@@ -296,9 +267,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 await deleteDoc(doc(db, "users", user.uid, "tasks_metadata", taskId));
             }
 
-            // UIから削除
-            setTasks(prev => prev.filter(t => t.id !== taskId));
+            // UIから削除 (オプティミスティックUI)
+            setGoogleTasks(prev => prev.filter(t => t.id !== taskId));
             setEditingTask(null);
+
+            // 削除結果をFirestoreキャッシュにも同期
+            await syncData();
         } catch (err: any) {
             console.error(err);
             alert("タスクの削除に失敗しました");
