@@ -247,6 +247,39 @@ export default function TaskList({ place }: { place: PlaceType }) {
         }
     };
 
+    const handleUndoTask = async (task: AppTask, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!user || (!googleAccessToken && !googleRefreshToken)) return;
+
+        setGoogleTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'needsAction' } : t));
+
+        try {
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
+            const res = await fetch('/api/tasks', {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({
+                    id: task.id,
+                    status: 'needsAction',
+                    // Google Tasks APIでは、statusをneedsActionに戻す時はcompletedをnullにする必要があります（通常はAPI側で処理されますが念のため）
+                    completed: null
+                })
+            });
+
+            if (!res.ok) {
+                alert("タスクの復元に失敗しました。");
+            } else {
+                await syncData();
+            }
+        } catch (error) {
+            console.error(error);
+            alert("タスクの復元に失敗しました。");
+        }
+    };
+
     const handleDeleteTask = async (taskId: string) => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
         if (!confirm("このタスクを完全に削除しますか？")) return;
@@ -293,7 +326,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditPlace(task.place);
     };
 
+    const [showCompleted, setShowCompleted] = useState(false);
+
     const placeTasks = tasks.filter(t => t.status === "needsAction");
+    const completedTasks = tasks.filter(t => t.status === "completed");
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin h-8 w-8 text-gray-400" /></div>;
     if (error) return (
@@ -346,6 +382,43 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     </div>
                 </div>
             ))}
+
+            {completedTasks.length > 0 && (
+                <div className="mt-8">
+                    <button
+                        onClick={() => setShowCompleted(!showCompleted)}
+                        className="flex items-center gap-2 text-sm text-gray-400 font-medium hover:text-gray-600 transition-colors mx-auto"
+                    >
+                        {showCompleted ? "完了済みタスクを隠す" : `完了済みタスクを表示 (${completedTasks.length})`}
+                    </button>
+
+                    <AnimatePresence>
+                        {showCompleted && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden mt-4 space-y-3"
+                            >
+                                {completedTasks.map(task => (
+                                    <div key={task.id} className="bg-white/40 p-4 rounded-xl border border-gray-100 flex items-start gap-4">
+                                        <button
+                                            onClick={(e) => handleUndoTask(task, e)}
+                                            className="mt-0.5 w-5 h-5 shrink-0 rounded bg-green-500 flex items-center justify-center hover:bg-green-600 transition-colors"
+                                            title="未完了に戻す"
+                                        >
+                                            <Check className="w-3 h-3 text-white" />
+                                        </button>
+                                        <div className="flex-1 min-w-0 opacity-50 line-through">
+                                            <h3 className="text-gray-600 font-medium text-sm truncate">{task.title}</h3>
+                                        </div>
+                                    </div>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            )}
 
             <AnimatePresence>
                 {editingTask && (
