@@ -52,6 +52,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editRoutineConfig, setEditRoutineConfig] = useState<RoutineConfig>({ type: 'none' });
     const [editDueDate, setEditDueDate] = useState("");
     const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
+    const [editTitle, setEditTitle] = useState("");
+    const [editNotes, setEditNotes] = useState("");
 
     const { syncData } = useSync();
 
@@ -123,8 +125,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
         setIsUpdating(true);
         try {
-            // Google Tasks の期限を更新 (変更がある場合)
-            if (editDueDate !== (editingTask.dueDate ? editingTask.dueDate.split('T')[0] : "")) {
+            // Google Tasks の基本情報を更新 (タイトル、メモ、期限に変更がある場合)
+            const isTitleChanged = editTitle !== editingTask.title;
+            const isNotesChanged = editNotes !== (editingTask.notes || "");
+            const isDueChanged = editDueDate !== (editingTask.dueDate ? editingTask.dueDate.split('T')[0] : "");
+
+            if (isTitleChanged || isNotesChanged || isDueChanged) {
                 const headers: Record<string, string> = {
                     "Content-Type": "application/json",
                 };
@@ -132,10 +138,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
                 await fetch("/api/tasks", {
-                    method: "PATCH", // または PUT。プロジェクトのAPI実装に合わせる
+                    method: "PATCH",
                     headers,
                     body: JSON.stringify({
                         id: editingTask.id,
+                        title: editTitle,
+                        notes: editNotes,
                         due: editDueDate ? new Date(editDueDate).toISOString() : null
                     })
                 });
@@ -324,6 +332,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditRoutineConfig(task.routineConfig || { type: 'none' });
         setEditDueDate(task.dueDate ? task.dueDate.split('T')[0] : "");
         setEditPlace(task.place);
+        setEditTitle(task.title);
+        setEditNotes(task.notes || "");
     };
 
     const [showCompleted, setShowCompleted] = useState(false);
@@ -439,18 +449,35 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
                             <div className="flex-1 overflow-y-auto space-y-8 pr-2">
                                 <section className="flex items-start justify-between">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-gray-900 mb-2">{editingTask.title}</h3>
+                                    <div className="flex-1 mr-4">
+                                        <input
+                                            type="text"
+                                            value={editTitle}
+                                            onChange={(e) => setEditTitle(e.target.value)}
+                                            className="text-xl font-bold text-gray-900 mb-1 w-full bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none"
+                                            placeholder="タスク名"
+                                        />
                                         <p className="text-xs text-gray-400">詳細設定を行います</p>
                                     </div>
                                     <button
                                         onClick={() => handleDeleteTask(editingTask.id)}
-                                        className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center"
+                                        className="p-2 text-red-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex flex-col items-center shrink-0"
                                         title="タスクを削除"
                                     >
                                         <Trash2 className="w-5 h-5" />
                                         <span className="text-[8px] mt-1 font-bold">削除</span>
                                     </button>
+                                </section>
+
+                                {/* メモ設定 */}
+                                <section>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">メモ</label>
+                                    <textarea
+                                        value={editNotes}
+                                        onChange={(e) => setEditNotes(e.target.value)}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 px-4 text-sm min-h-[100px] focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all resize-none"
+                                        placeholder="メモを入力してください..."
+                                    />
                                 </section>
 
                                 {/* 所属プレイス設定 */}
