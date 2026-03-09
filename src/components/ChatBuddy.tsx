@@ -11,7 +11,7 @@ type Message = {
 };
 
 export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks: any[]) => void }) {
-    const { user, profile, googleAccessToken } = useAuth();
+    const { user, profile, googleAccessToken, googleRefreshToken } = useAuth();
     const [messages, setMessages] = useState<Message[]>([
         { role: "assistant", content: "こんにちは！あなたの秘書のバディです。何かお手伝いできることはありますか？雑談も大歓迎ですよ！" }
     ]);
@@ -51,13 +51,22 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             const fetchSummary = async () => {
                 try {
                     // 1. タスクとカレンダーの取得
+                    const headers: Record<string, string> = {};
+                    if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                    if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
                     const [tasksRes, calRes] = await Promise.all([
-                        fetch("/api/tasks", { headers: { Authorization: `Bearer ${googleAccessToken}` } }),
-                        fetch("/api/calendar", { headers: { Authorization: `Bearer ${googleAccessToken}` } })
+                        fetch("/api/tasks", { headers }),
+                        fetch("/api/calendar", { headers })
                     ]);
 
                     const tasksData = await tasksRes.json();
                     const calData = await calRes.json();
+
+                    // カレンダーイベントをローカルストレージにキャッシュする（追加）
+                    if (calData?.events && typeof window !== "undefined") {
+                        localStorage.setItem('cachedCalendarEvents', JSON.stringify(calData.events));
+                    }
 
                     // 2. 要約の生成
                     const sumRes = await fetch("/api/ai/summarize", {
