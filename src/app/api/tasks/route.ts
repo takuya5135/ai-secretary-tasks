@@ -7,8 +7,8 @@ export async function GET(request: Request) {
         // 1. AuthorizationヘッダーからBearerトークン（Google Access Token） または Refresh Tokenを取得
         const authHeader = request.headers.get("Authorization");
         const refreshTokenHeader = request.headers.get("x-google-refresh-token");
-
         const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+        console.log('GET /api/tasks: token', token, 'refreshTokenHeader', refreshTokenHeader);
 
         if (!token && !refreshTokenHeader) {
             return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });

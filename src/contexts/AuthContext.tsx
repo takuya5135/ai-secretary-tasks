@@ -102,17 +102,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     if (data.googleRefreshToken) {
                         setGoogleRefreshToken(data.googleRefreshToken);
                         localStorage.setItem('googleRefreshToken', data.googleRefreshToken);
+                        console.log('Firestoreから取得したgoogleRefreshTokenを設定', data.googleRefreshToken);
                     } else {
                         setGoogleRefreshToken(null);
                         localStorage.removeItem('googleRefreshToken');
-                    }
-
-                    // 最新状態をキャッシュ（次回起動用）
-                    localStorage.setItem("cachedUserApproved", String(approved));
-                    if (userProfile) {
-                        localStorage.setItem("cachedUserProfile", JSON.stringify(userProfile));
-                    } else {
-                        localStorage.removeItem("cachedUserProfile");
+                        console.log('FirestoreにgoogleRefreshTokenが無い');
                     }
                 } else {
                     // 初回ログイン時はusersドキュメントを作成 (デフォルトは未承認)
@@ -127,9 +121,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setIsApproved(false);
                     setProfile(null);
                     setGoogleRefreshToken(null);
-                    localStorage.setItem("cachedUserApproved", "false");
+                }
+
+                // 最新状態をキャッシュ（次回起動用）
+                localStorage.setItem("cachedUserApproved", String(isApproved)); // Use the state variable
+                if (profile) { // Use the state variable
+                    localStorage.setItem("cachedUserProfile", JSON.stringify(profile));
+                } else {
                     localStorage.removeItem("cachedUserProfile");
-                    localStorage.removeItem("googleRefreshToken");
+                }
+                if (googleRefreshToken) { // Use the state variable
+                    localStorage.setItem('googleRefreshToken', googleRefreshToken);
+                } else {
+                    localStorage.removeItem('googleRefreshToken');
                 }
             } else {
                 setIsApproved(false);
@@ -161,6 +165,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             alert(`ログインエラー: ${error.message || "予期せぬエラーが発生しました"}`);
         }
     };
+
+    // ユーザーがログインした後、リフレッシュトークンが無い場合は自動でGoogle Tasks連携を試みる
+    useEffect(() => {
+        if (user && !googleRefreshToken) {
+            console.log('ユーザーがログインしましたがリフレッシュトークンが無いため、connectGoogleTasks を呼び出します');
+            connectGoogleTasks();
+        }
+    }, [user, googleRefreshToken]);
 
     // Google Tasks連携（初回のみ・リフレッシュトークン取得）
     const connectGoogleTasks = async () => {

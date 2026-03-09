@@ -68,7 +68,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         }
         // キャッシュがない場合のみローディングスピナーを出す
         if (tasks.length === 0) setLoading(true);
-        setError(null);
+        console.log('fetchTasks: googleAccessToken', googleAccessToken, 'googleRefreshToken', googleRefreshToken);
         try {
             const headers: Record<string, string> = {};
             if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;

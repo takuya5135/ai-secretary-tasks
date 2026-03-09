@@ -8,7 +8,7 @@ export async function GET(request: Request) {
         const refreshTokenHeader = request.headers.get("x-google-refresh-token");
 
         const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-
+        console.log('GET /api/calendar: accessToken', accessToken, 'refreshTokenHeader', refreshTokenHeader);
         if (!accessToken && !refreshTokenHeader) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
