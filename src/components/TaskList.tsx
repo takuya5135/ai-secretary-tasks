@@ -412,6 +412,13 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         <div className="flex-1 min-w-0 opacity-50 line-through">
                                             <h3 className="text-gray-600 font-medium text-sm truncate">{task.title}</h3>
                                         </div>
+                                        <button
+                                            onClick={() => handleDeleteTask(task.id)}
+                                            className="mt-0.5 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                            title="完全に削除"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 ))}
                             </motion.div>
