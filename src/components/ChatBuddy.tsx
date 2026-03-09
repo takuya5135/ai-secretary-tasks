@@ -157,13 +157,35 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         setIsLoading(true);
 
         try {
+            // ローカルストレージ内のキャッシュからタスクとカレンダーを取得 (無い場合は空配列)
+            // SWRを採用しているため、基本的にはキャッシュされている前提
+            let tasksCache = [];
+            let calCache = [];
+
+            try {
+                const calData = localStorage.getItem('cachedCalendarEvents');
+                if (calData) calCache = JSON.parse(calData);
+
+                // タスクはプレイスごとに分かれているので結合する
+                const taskPlaces = ["1st", "2nd", "3rd", "4th"];
+                for (const place of taskPlaces) {
+                    const placeData = localStorage.getItem(`cachedTasks_${place}`);
+                    if (placeData) tasksCache.push(...JSON.parse(placeData));
+                }
+            } catch (e) {
+                console.warn("Failed to read cache for AI context", e);
+            }
+
             const res = await fetch("/api/ai/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     messages: [...messages, userMessage],
                     userProfile: profile,
-                    contextData: { /* 追加で直近の予定などを入れる場合はここ */ }
+                    contextData: {
+                        tasks: tasksCache,
+                        calendarEvents: calCache
+                    }
                 })
             });
 
