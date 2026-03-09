@@ -172,13 +172,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    // ユーザーがログインした後、リフレッシュトークンが無い場合は自動でGoogle Tasks連携を試みる
-    useEffect(() => {
-        if (user && isFirestoreLoaded && !googleRefreshToken) {
-            console.log('ユーザーがログインし、Firestoreロード完了後もリフレッシュトークンが無いため、connectGoogleTasks を呼び出します');
-            connectGoogleTasks();
-        }
-    }, [user, googleRefreshToken, isFirestoreLoaded]);
+    // 【修正】自動での connectGoogleTasks 呼び出しを削除。
+    // useEffect内での自動signInWithPopupは、モバイルブラウザのポップアップブロックに引っかかる、またはリロードループを引き起こす原因となります。
+    // その代わり、アクセストークンが無い（または切れた）場合はUI上でユーザーのタップにより再連携を促します。
 
     // Google Tasks連携（初回のみ・リフレッシュトークン取得）
     const connectGoogleTasks = async () => {

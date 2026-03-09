@@ -34,7 +34,7 @@ const getUrgencyStyles = (u: number) => {
 };
 
 export default function TaskList({ place }: { place: PlaceType }) {
-    const { user, googleAccessToken, googleRefreshToken } = useAuth();
+    const { user, googleAccessToken, googleRefreshToken, connectGoogleTasks } = useAuth();
     const [tasks, setTasks] = useState<AppTask[]>(() => {
         if (typeof window !== "undefined") {
             const cached = localStorage.getItem(`cachedTasks_${place}`);
@@ -64,6 +64,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const fetchTasks = async () => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) {
             setLoading(false);
+            if (user) {
+                // ユーザーはログインしているがGoogleトークンがない場合
+                setError("Googleカレンダー・タスクへの連携が必要です。再接続してください。");
+            }
             return;
         }
         // キャッシュがない場合のみローディングスピナーを出す
@@ -118,7 +122,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 localStorage.setItem(`cachedTasks_${place}`, JSON.stringify(placeTasks));
             }
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : "タスクの取得に失敗しました");
+            const errorMessage = err instanceof Error ? err.message : "タスクの取得に失敗しました";
+            if (errorMessage.includes("401") || errorMessage.includes("403")) {
+                setError("Googleの認証期限が切れました。再接続してください。");
+            } else {
+                setError(errorMessage);
+            }
         } finally {
             setLoading(false);
         }
@@ -311,7 +320,20 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const placeTasks = tasks.filter(t => t.status === "needsAction");
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin h-8 w-8 text-gray-400" /></div>;
-    if (error) return <div className="p-6 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100"><AlertTriangle className="mx-auto mb-2" />{error}</div>;
+    if (error) return (
+        <div className="p-6 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100 flex flex-col items-center">
+            <AlertTriangle className="mx-auto mb-2 w-8 h-8" />
+            <p className="font-bold text-sm mb-4">{error}</p>
+            {(error.includes("401") || error.includes("認証") || error.includes("連携") || error.includes("接続")) && (
+                <button
+                    onClick={() => { setError(null); connectGoogleTasks(); }}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all"
+                >
+                    Googleに接続する
+                </button>
+            )}
+        </div>
+    );
 
     return (
         <div className="space-y-3 pb-24">
