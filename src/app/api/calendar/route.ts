@@ -50,9 +50,11 @@ export async function GET(request: Request) {
 
     } catch (error: unknown) {
         console.error("GET /api/calendar error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
         return NextResponse.json(
-            { error: "Failed to fetch calendar events", details: error instanceof Error ? error.message : "Unknown error" },
-            { status: 500 }
+            { error: "Failed to fetch calendar events", details: errorMessage },
+            { status }
         );
     }
 }

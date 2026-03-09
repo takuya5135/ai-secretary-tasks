@@ -44,9 +44,11 @@ export async function GET(request: Request) {
 
     } catch (error: unknown) {
         console.error("GET /api/tasks error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
         return NextResponse.json(
-            { error: "Failed to fetch tasks from Google", details: error instanceof Error ? error.message : "Unknown error" },
-            { status: 500 }
+            { error: "Failed to fetch tasks from Google", details: errorMessage },
+            { status }
         );
     }
 }
@@ -93,9 +95,11 @@ export async function POST(request: Request) {
         return NextResponse.json(response.data, { status: 201 });
     } catch (error: unknown) {
         console.error("POST /api/tasks error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
         return NextResponse.json(
-            { error: "Failed to create task", details: error instanceof Error ? error.message : "Unknown error" },
-            { status: 500 }
+            { error: "Failed to create task", details: errorMessage },
+            { status }
         );
     }
 }
@@ -141,7 +145,9 @@ export async function PATCH(request: Request) {
         return NextResponse.json(response.data, { status: 200 });
     } catch (error: unknown) {
         console.error("PATCH /api/tasks error:", error);
-        return NextResponse.json({ error: "Failed to update task" }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
+        return NextResponse.json({ error: "Failed to update task", details: errorMessage }, { status });
     }
 }
 
@@ -180,6 +186,8 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ success: true }, { status: 200 });
     } catch (error: unknown) {
         console.error("DELETE /api/tasks error:", error);
-        return NextResponse.json({ error: "Failed to delete task" }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
+        return NextResponse.json({ error: "Failed to delete task", details: errorMessage }, { status });
     }
 }
