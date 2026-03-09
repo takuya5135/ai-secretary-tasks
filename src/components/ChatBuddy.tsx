@@ -27,6 +27,7 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
     const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
+    const isSummarizingRef = useRef(false);
 
     // 日付が変わったらチャットをリセットする処理
     useEffect(() => {
@@ -50,7 +51,8 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
 
     // 起動時の要約生成
     useEffect(() => {
-        if (googleAccessToken && user && !hasSummarized) {
+        if (googleAccessToken && user && !hasSummarized && !isSummarizingRef.current) {
+            isSummarizingRef.current = true;
             const fetchSummary = async () => {
                 try {
                     if (!db) return;
@@ -104,6 +106,8 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                     setHasSummarized(true);
                 } catch (error) {
                     console.error("Initialization summary error:", error);
+                } finally {
+                    isSummarizingRef.current = false;
                 }
             };
             fetchSummary();
