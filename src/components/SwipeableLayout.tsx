@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -25,7 +27,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     const [showDetails, setShowDetails] = useState(false); // 詳細設定の開閉
 
     // データ同期用フック
-    const { syncData, isSyncing } = useSync();
+    const { syncData, syncError, isSyncing } = useSync();
 
     // 初回マウント時＋認証情報変更時にバックグラウンドで最新データをFirebaseへ同期
     useEffect(() => {
