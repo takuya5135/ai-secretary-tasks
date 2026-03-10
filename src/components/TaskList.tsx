@@ -1,20 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/exhaustive-deps */
-"use client";
-
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
-import { Check, Clock, AlertTriangle } from "lucide-react";
+import {
+    Check, Clock, AlertTriangle, Calendar as CalendarIcon,
+    MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles,
+    ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
+    Search, ArrowUpDown
+} from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown } from "lucide-react";
 import { PLACES, PlaceType } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
-import { Search, ArrowUpDown } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // 重要度のラベルと色を返すヘルパー関数
@@ -388,38 +386,51 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditIsFrog(task.isFrog || false);
     };
 
+    const [showCompleted, setShowCompleted] = useState(false);
+
+    // 表示中の未完了タスク (並べ替えの基準となるリスト)
+    const placeTasks = useMemo(() => {
+        return tasks.filter(t => t.status === "needsAction");
+    }, [tasks]);
+
     const handleMoveTask = async (taskId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
-        // placeTasks ではなく全タスクリスト (tasks) 内でのインデックスを探す (完了済みタスクも含めた絶対順序を保つため)
-        const currentIndex = tasks.findIndex(t => t.id === taskId);
+        const currentIndex = placeTasks.findIndex(t => t.id === taskId);
         if (currentIndex === -1) return;
 
-        let previousId: string | null = null;
+        let targetPreviousId: string | null = null;
         let newTasks = [...tasks];
 
+        // 移動先の「直前のタスク」を探す
         if (direction === 'top') {
-            previousId = null;
-            const [movedItem] = newTasks.splice(currentIndex, 1);
-            newTasks.unshift(movedItem);
+            targetPreviousId = null;
         } else if (direction === 'bottom') {
-            previousId = tasks[tasks.length - 1].id;
-            const [movedItem] = newTasks.splice(currentIndex, 1);
-            newTasks.push(movedItem);
+            targetPreviousId = placeTasks[placeTasks.length - 1].id;
         } else if (direction === 'up') {
             if (currentIndex === 0) return;
-            previousId = currentIndex === 1 ? null : tasks[currentIndex - 2].id;
-            const [movedItem] = newTasks.splice(currentIndex, 1);
-            newTasks.splice(currentIndex - 1, 0, movedItem);
+            // ターゲットの一つ上のタスクの「さらに上」を previous に指定すると、ターゲットの上に移動する
+            targetPreviousId = currentIndex === 1 ? null : placeTasks[currentIndex - 2].id;
         } else if (direction === 'down') {
-            if (currentIndex === tasks.length - 1) return;
-            previousId = tasks[currentIndex + 1].id;
-            const [movedItem] = newTasks.splice(currentIndex, 1);
-            newTasks.splice(currentIndex + 1, 0, movedItem);
+            if (currentIndex === placeTasks.length - 1) return;
+            // ターゲットの一つ下のタスクを previous に指定すると、その下（ターゲットの下）に移動する
+            targetPreviousId = placeTasks[currentIndex + 1].id;
         }
 
-        // オプティミスティックUI更新
-        setTasks(newTasks);
+        // オプティミスティックUIの更新 (全タスクリスト tasks 内での位置を入れ替える)
+        const absoluteIndex = tasks.findIndex(t => t.id === taskId);
+        if (absoluteIndex !== -1) {
+            const [movedItem] = newTasks.splice(absoluteIndex, 1);
+            let insertAt = 0;
+            if (targetPreviousId === null) {
+                insertAt = 0;
+            } else {
+                const prevIdx = newTasks.findIndex(t => t.id === targetPreviousId);
+                insertAt = prevIdx + 1;
+            }
+            newTasks.splice(insertAt, 0, movedItem);
+            setTasks(newTasks);
+        }
 
         try {
             const res = await fetch("/api/tasks", {
@@ -429,23 +440,17 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     "Authorization": `Bearer ${googleAccessToken}`,
                     "x-google-refresh-token": googleRefreshToken || ""
                 },
-                body: JSON.stringify({ id: taskId, previous: previousId })
+                body: JSON.stringify({ id: taskId, previous: targetPreviousId })
             });
 
             if (!res.ok) throw new Error("Failed to move task");
-
-            // 同期をトリガー (確実にバックエンドと合わせる)
             await syncData();
         } catch (err) {
             console.error(err);
             setError("移動に失敗しました");
-            await syncData(); // エラー時は再同期して元の順序に戻す
+            await syncData();
         }
     };
-
-    const [showCompleted, setShowCompleted] = useState(false);
-
-    const placeTasks = tasks.filter(t => t.status === "needsAction");
     const completedTasks = tasks.filter(t => t.status === "completed");
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin h-8 w-8 text-gray-400" /></div>;

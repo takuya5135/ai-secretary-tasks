@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
 import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity } from "lucide-react";
@@ -182,7 +182,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         place: task.place,
                         importance: task.importance,
                         urgency: task.urgency,
-                        is_frog: (task as any).isFrog || (task as any).is_frog || false,
+                        is_frog: task.isFrog || false,
                         created_at: new Date().toISOString()
                     });
                 }

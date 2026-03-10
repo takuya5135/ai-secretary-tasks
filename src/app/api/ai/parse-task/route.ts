@@ -9,6 +9,7 @@ export type AIParsedTask = {
     importance: number; // 1-4
     urgency: number; // 1-4
     place: "1st" | "2nd" | "3rd" | "4th";
+    isFrog?: boolean;
 };
 
 export async function POST(request: Request) {
