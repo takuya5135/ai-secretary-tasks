@@ -14,7 +14,7 @@ import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2, S
 import { PLACES, PlaceType } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
-import { Search } from "lucide-react";
+import { Search, ArrowUpDown } from "lucide-react";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -62,6 +62,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [taskMetadataMap, setTaskMetadataMap] = useState<Map<string, TaskMetadata>>(new Map());
     const [searchQuery, setSearchQuery] = useState("");
     const [editTaskType, setEditTaskType] = useState<'todo' | 'wish'>('todo');
+    const [sortMode, setSortMode] = useState<'importance' | 'urgency' | 'dueDate' | 'createdAt' | 'manual'>('importance');
 
     // 1. Firestoreからデータをリアルタイム購読
     useEffect(() => {
@@ -128,8 +129,27 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 (t.notes || "").toLowerCase().includes(searchQuery.toLowerCase());
             return matchPlace && matchSearch;
         });
-        setTasks(filtered);
-    }, [googleTasks, taskMetadataMap, place, searchQuery]);
+
+        // 並べ替えロジック
+        const sorted = [...filtered].sort((a, b) => {
+            if (sortMode === 'manual') return 0;
+            if (sortMode === 'importance') return (b.importance || 0) - (a.importance || 0);
+            if (sortMode === 'urgency') return (b.urgency || 0) - (a.urgency || 0);
+            if (sortMode === 'dueDate') {
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            }
+            if (sortMode === 'createdAt') {
+                if (!a.createdAt) return 1;
+                if (!b.createdAt) return -1;
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            }
+            return 0;
+        });
+
+        setTasks(sorted);
+    }, [googleTasks, taskMetadataMap, place, searchQuery, sortMode]);
 
     const handleUpdateMetadata = async () => {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
@@ -384,6 +404,29 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-white/50 backdrop-blur-sm border border-white/50 rounded-2xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all shadow-sm"
                 />
+            </div>
+
+            {/* 並べ替えスイッチ */}
+            <div className="flex items-center gap-2 mb-6 overflow-x-auto no-scrollbar pb-2">
+                <div className="flex items-center gap-1.5 text-gray-400 mr-1 shrink-0">
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Sort:</span>
+                </div>
+                {[
+                    { id: 'importance', label: '重要度' },
+                    { id: 'urgency', label: '緊急度' },
+                    { id: 'dueDate', label: '期限' },
+                    { id: 'createdAt', label: '作成日' },
+                    { id: 'manual', label: '標準' }
+                ].map(mode => (
+                    <button
+                        key={mode.id}
+                        onClick={() => setSortMode(mode.id as any)}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap border ${sortMode === mode.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white/50 text-gray-500 border-white/50 hover:bg-white'}`}
+                    >
+                        {mode.label}
+                    </button>
+                ))}
             </div>
 
             {placeTasks.map(task => (
