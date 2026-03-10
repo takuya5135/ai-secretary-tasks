@@ -211,7 +211,10 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             className="w-10 h-10 rounded-full bg-white/50 backdrop-blur-sm border border-white/50 shadow-sm flex items-center justify-center hover:bg-white/80 transition-colors active:scale-95 overflow-hidden"
                         >
                             {user?.photoURL ? (
-                                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                                <div className="w-full h-full relative">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                                </div>
                             ) : (
                                 <User className="w-5 h-5 text-gray-600" />
                             )}

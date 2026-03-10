@@ -7,17 +7,12 @@ import {
     Plus,
     TrendingDown,
     TrendingUp,
-    Calendar,
     Scale,
-    ChevronLeft,
-    ChevronRight,
     History,
     LineChart as ChartIcon,
     Trash2
 } from "lucide-react";
 import {
-    LineChart,
-    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -34,7 +29,6 @@ import {
     onSnapshot,
     deleteDoc,
     doc,
-    limit,
     Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -45,7 +39,7 @@ type WeightRecord = {
     date: string; // ISO String
     weight: number;
     notes?: string;
-    createdAt: any;
+    createdAt: Timestamp;
 };
 
 type Period = '1w' | '1m' | '6m' | '1y' | '3y';
@@ -92,7 +86,7 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
 
         // 期間に応じたフィルタリング
         const now = new Date();
-        let startDate = new Date();
+        const startDate = new Date();
         if (period === '1w') startDate.setDate(now.getDate() - 7);
         else if (period === '1m') startDate.setMonth(now.getMonth() - 1);
         else if (period === '6m') startDate.setMonth(now.getMonth() - 6);
@@ -330,7 +324,7 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
 
                         <div className="space-y-3">
                             {records.length > 0 ? (
-                                records.slice(0, 10).map((record, index) => (
+                                records.slice(0, 10).map((record) => (
                                     <div key={record.id} className="group bg-white p-4 rounded-2xl border border-gray-50 shadow-sm flex items-center gap-4 hover:border-pink-100 transition-all">
                                         <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500 shrink-0">
                                             <span className="text-xs font-black">{new Date(record.date).getDate()}</span>
