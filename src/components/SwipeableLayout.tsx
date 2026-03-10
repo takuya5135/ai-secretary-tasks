@@ -220,14 +220,6 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             )}
                         </button>
 
-                        <button
-                            onClick={() => setShowWeightTracker(true)}
-                            className="w-10 h-10 rounded-full bg-pink-50 text-pink-500 border border-pink-100 shadow-sm flex items-center justify-center hover:bg-pink-100 transition-colors active:scale-95 shrink-0"
-                            title="体重管理を開く"
-                        >
-                            <Activity className="w-5 h-5" />
-                        </button>
-
                         <AnimatePresence>
                             {showUserMenu && (
                                 <>
@@ -338,10 +330,24 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         className="absolute inset-0 px-6 overflow-y-auto pb-32" // FABのスペースを空ける
                     >
                         <div className="py-4">
-                            <h2 className={`text-xl font-bold mb-1 ${activePlace.textColor}`}>
-                                {activePlace.label} Tasks
-                            </h2>
-                            <p className="text-sm text-gray-500 mb-6">{activePlace.description}</p>
+                            <div className="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 className={`text-xl font-bold mb-1 ${activePlace.textColor}`}>
+                                        {activePlace.label} Tasks
+                                    </h2>
+                                    <p className="text-sm text-gray-500">{activePlace.description}</p>
+                                </div>
+                                {activePlaceId === '1st' && (
+                                    <button
+                                        onClick={() => setShowWeightTracker(true)}
+                                        className="mt-1 w-12 h-12 rounded-2xl bg-white/60 backdrop-blur-md text-pink-500 border border-white shadow-sm flex flex-col items-center justify-center hover:bg-white/80 transition-all active:scale-95 shrink-0 group"
+                                        title="体重管理を開く"
+                                    >
+                                        <Activity className="w-6 h-6 mb-0.5 group-hover:scale-110 transition-transform" />
+                                        <span className="text-[8px] font-bold uppercase tracking-tighter">Weight</span>
+                                    </button>
+                                )}
+                            </div>
 
                             {/* タスクリストコンポーネントの配置 */}
                             <TaskList key={`${activePlace.id}-${refreshKey}`} place={activePlace.id} />
