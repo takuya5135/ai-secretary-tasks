@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { PLACES, PlaceType } from "@/lib/constants";
+import { PLACES, PlaceType, SHOPPING_LOCATIONS } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
 import confetti from "canvas-confetti";
@@ -54,6 +54,11 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [editPlace, setEditPlace] = useState<PlaceType>("2nd");
     const [editTitle, setEditTitle] = useState("");
     const [editNotes, setEditNotes] = useState("");
+    const [editShoppingLocation, setEditShoppingLocation] = useState("未分類");
+    const [openLocations, setOpenLocations] = useState<Record<string, boolean>>({});
+    const [userShoppingLocations, setUserShoppingLocations] = useState<string[]>(SHOPPING_LOCATIONS);
+    const [isEditingLocations, setIsEditingLocations] = useState(false);
+    const [newLocationName, setNewLocationName] = useState("");
 
     const { syncData } = useSync();
 
@@ -97,9 +102,21 @@ export default function TaskList({ place }: { place: PlaceType }) {
             console.error(err);
         });
 
+        // ユーザーの買い物場所設定を購読
+        const unsubscribeSettings = onSnapshot(doc(db, "users", user.uid, "settings", "shopping"), (docSnap) => {
+            if (docSnap.exists() && docSnap.data().locations) {
+                setUserShoppingLocations(docSnap.data().locations);
+            } else {
+                setUserShoppingLocations(SHOPPING_LOCATIONS);
+            }
+        }, (err) => {
+            console.error("Failed to fetch shopping locations", err);
+        });
+
         return () => {
             unsubscribeTasks();
             unsubscribeMeta();
+            unsubscribeSettings();
         };
     }, [user, googleAccessToken, googleRefreshToken]);
 
@@ -121,6 +138,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 taskType: meta?.task_type || 'todo',
                 isFrog: meta?.is_frog || false,
                 createdAt: meta?.created_at,
+                shoppingLocation: meta?.shopping_location || "未分類",
             };
         });
 
@@ -193,6 +211,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     routine_config: editRoutineConfig,
                     task_type: editTaskType,
                     is_frog: editIsFrog,
+                    shopping_location: editShoppingLocation,
                     updated_at: new Date().toISOString(),
                     // 新規作成時のみ created_at を設定するための配慮（既存ならそのまま）
                     created_at: editingTask.createdAt || new Date().toISOString()
@@ -212,6 +231,47 @@ export default function TaskList({ place }: { place: PlaceType }) {
             alert("タスクの更新に失敗しました");
         } finally {
             setIsUpdating(false);
+        }
+    };
+
+    const handleAddShoppingLocation = async () => {
+        if (!user || !db || !newLocationName.trim()) return;
+        if (userShoppingLocations.includes(newLocationName.trim())) {
+            alert("既に登録されています。");
+            return;
+        }
+
+        const updatedLocations = [...userShoppingLocations, newLocationName.trim()];
+        try {
+            await setDoc(doc(db, "users", user.uid, "settings", "shopping"), {
+                locations: updatedLocations,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+            setNewLocationName("");
+        } catch (err) {
+            console.error(err);
+            alert("カテゴリの追加に失敗しました。");
+        }
+    };
+
+    const handleDeleteShoppingLocation = async (locationToDelete: string) => {
+        if (!user || !db) return;
+        if (!confirm(`「${locationToDelete}」を削除しますか？\n（この場所に設定されているタスクの場所は変更されません）`)) return;
+
+        const updatedLocations = userShoppingLocations.filter(loc => loc !== locationToDelete);
+        try {
+            await setDoc(doc(db, "users", user.uid, "settings", "shopping"), {
+                locations: updatedLocations,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            // 削除した場所が現在選択中の場所だった場合、「未分類」に戻す
+            if (editShoppingLocation === locationToDelete) {
+                setEditShoppingLocation("未分類");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("カテゴリの削除に失敗しました。");
         }
     };
 
@@ -258,6 +318,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                             routine_config: task.routineConfig,
                             task_type: task.taskType,
                             is_frog: task.isFrog, // カエル設定も引き継ぐ
+                            shopping_location: task.shoppingLocation || "未分類",
                             created_at: new Date().toISOString()
                         });
                     }
@@ -384,6 +445,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditNotes(task.notes || "");
         setEditTaskType(task.taskType || 'todo');
         setEditIsFrog(task.isFrog || false);
+        setEditShoppingLocation(task.shoppingLocation || "未分類");
     };
 
     const [showCompleted, setShowCompleted] = useState(false);
@@ -469,6 +531,83 @@ export default function TaskList({ place }: { place: PlaceType }) {
             }
         }
     };
+    const renderTaskItem = (task: AppTask) => (
+        <div key={task.id} className={`${task.taskType === 'wish' ? 'bg-pink-50/60 border-pink-100' : 'bg-white/80 border-white/50'} backdrop-blur-sm p-4 rounded-xl shadow-sm border flex items-start gap-4 hover:shadow-md transition-shadow group ${task.isFrog ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}>
+            <button
+                onClick={(e) => handleCompleteTask(task, e)}
+                className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-green-50 hover:border-green-400 transition-colors"
+            >
+                <Check className="w-3 h-3 text-transparent group-hover:text-green-500 hover:text-green-600 transition-colors" />
+            </button>
+            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEditModal(task)}>
+                <div className="flex items-center gap-2">
+                    {task.isFrog && <span className="text-base leading-none">🐸</span>}
+                    {task.taskType === 'wish' && <Sparkles className="w-3 h-3 text-pink-400 shrink-0" />}
+                    <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                    {task.dueDate && (
+                        <div className="flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
+                            <Clock className="w-3 h-3" />
+                            <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                        </div>
+                    )}
+                    {task.createdAt && (
+                        <div className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md ${getDaysSince(task.createdAt) > 7 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-gray-50 text-gray-500 border border-gray-100'}`}>
+                            <span>{getDaysSince(task.createdAt)}日経過</span>
+                        </div>
+                    )}
+                    <div className={`text-[10px] px-2 py-1 rounded-md border font-medium ${getImportanceStyles(task.importance).color}`}>
+                        {getImportanceStyles(task.importance).label}
+                    </div>
+                    <div className={`text-[10px] px-2 py-1 rounded-md border font-medium ${getUrgencyStyles(task.urgency).color}`}>
+                        {getUrgencyStyles(task.urgency).label}
+                    </div>
+                    {task.isRoutine && (
+                        <div className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-green-50 text-green-700 border border-green-200">
+                            <RotateCw className="w-3 h-3" />
+                            <span>ルーティン</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* 手動並べ替えボタン (標準モードの時のみ表示) */}
+            {sortMode === 'manual' && (
+                <div className="flex flex-col gap-1 opacity-100 transition-opacity self-center shrink-0 bg-gray-50/50 p-1 rounded-lg border border-gray-100 shadow-sm mr-1">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'top'); }}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                        title="一番上へ"
+                    >
+                        <ChevronsUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'up'); }}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                        title="一つ上へ"
+                    >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'down'); }}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                        title="一つ下へ"
+                    >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'bottom'); }}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                        title="一番下へ"
+                    >
+                        <ChevronsDown className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+
     const completedTasks = tasks.filter(t => t.status === "completed");
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin h-8 w-8 text-gray-400" /></div>;
@@ -533,82 +672,43 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 ))}
             </div>
 
-            {placeTasks.map(task => (
-                <div key={task.id} className={`${task.taskType === 'wish' ? 'bg-pink-50/60 border-pink-100' : 'bg-white/80 border-white/50'} backdrop-blur-sm p-4 rounded-xl shadow-sm border flex items-start gap-4 hover:shadow-md transition-shadow group ${task.isFrog ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}>
-                    <button
-                        onClick={(e) => handleCompleteTask(task, e)}
-                        className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-green-50 hover:border-green-400 transition-colors"
-                    >
-                        <Check className="w-3 h-3 text-transparent group-hover:text-green-500 hover:text-green-600 transition-colors" />
-                    </button>
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEditModal(task)}>
-                        <div className="flex items-center gap-2">
-                            {task.isFrog && <span className="text-base leading-none">🐸</span>}
-                            {task.taskType === 'wish' && <Sparkles className="w-3 h-3 text-pink-400 shrink-0" />}
-                            <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-3">
-                            {task.dueDate && (
-                                <div className="flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
-                                    <Clock className="w-3 h-3" />
-                                    <span>{new Date(task.dueDate).toLocaleDateString()}</span>
-                                </div>
-                            )}
-                            {task.createdAt && (
-                                <div className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md ${getDaysSince(task.createdAt) > 7 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-gray-50 text-gray-500 border border-gray-100'}`}>
-                                    <span>{getDaysSince(task.createdAt)}日経過</span>
-                                </div>
-                            )}
-                            <div className={`text-[10px] px-2 py-1 rounded-md border font-medium ${getImportanceStyles(task.importance).color}`}>
-                                {getImportanceStyles(task.importance).label}
+            {place === '4th' ? (
+                Object.entries(
+                    placeTasks.reduce((acc, task) => {
+                        const loc = task.shoppingLocation || "未分類";
+                        if (!acc[loc]) acc[loc] = [];
+                        acc[loc].push(task);
+                        return acc;
+                    }, {} as Record<string, AppTask[]>)
+                ).map(([location, groupTasks]) => (
+                    <div key={location} className="mb-4">
+                        <button
+                            onClick={() => setOpenLocations(prev => ({ ...prev, [location]: prev[location] !== false ? false : true }))}
+                            className="flex items-center justify-between w-full p-3 bg-white/60 backdrop-blur-sm rounded-xl font-bold text-gray-700 shadow-sm border border-gray-100 hover:bg-white/80 transition-all"
+                        >
+                            <div className="flex items-center gap-2">
+                                <span>{location}</span>
+                                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{groupTasks.length}</span>
                             </div>
-                            <div className={`text-[10px] px-2 py-1 rounded-md border font-medium ${getUrgencyStyles(task.urgency).color}`}>
-                                {getUrgencyStyles(task.urgency).label}
-                            </div>
-                            {task.isRoutine && (
-                                <div className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md bg-green-50 text-green-700 border border-green-200">
-                                    <RotateCw className="w-3 h-3" />
-                                    <span>ルーティン</span>
-                                </div>
+                            {openLocations[location] !== false ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                        </button>
+                        <AnimatePresence>
+                            {openLocations[location] !== false && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="overflow-hidden mt-3 space-y-3"
+                                >
+                                    {groupTasks.map(task => renderTaskItem(task))}
+                                </motion.div>
                             )}
-                        </div>
+                        </AnimatePresence>
                     </div>
-
-                    {/* 手動並べ替えボタン (標準モードの時のみ表示) */}
-                    {sortMode === 'manual' && (
-                        <div className="flex flex-col gap-1 opacity-100 transition-opacity self-center shrink-0 bg-gray-50/50 p-1 rounded-lg border border-gray-100 shadow-sm mr-1">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'top'); }}
-                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                                title="一番上へ"
-                            >
-                                <ChevronsUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'up'); }}
-                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                                title="一つ上へ"
-                            >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'down'); }}
-                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                                title="一つ下へ"
-                            >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'bottom'); }}
-                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
-                                title="一番下へ"
-                            >
-                                <ChevronsDown className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                    )}
-                </div>
-            ))}
+                ))
+            ) : (
+                placeTasks.map(task => renderTaskItem(task))
+            )}
 
             {completedTasks.length > 0 && (
                 <div className="mt-8">
@@ -747,6 +847,68 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         ))}
                                     </select>
                                 </section>
+
+                                {/* 買い物の場所設定（Shopping時のみ） */}
+                                {editPlace === '4th' && (
+                                    <section className="mt-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">買い物の場所</label>
+                                            <button
+                                                onClick={() => setIsEditingLocations(!isEditingLocations)}
+                                                className="text-[10px] font-bold text-blue-500 hover:text-blue-700 transition-colors"
+                                            >
+                                                {isEditingLocations ? "完了" : "カテゴリを編集"}
+                                            </button>
+                                        </div>
+
+                                        {isEditingLocations ? (
+                                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={newLocationName}
+                                                        onChange={(e) => setNewLocationName(e.target.value)}
+                                                        placeholder="新しい場所の名前"
+                                                        className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                                    />
+                                                    <button
+                                                        onClick={handleAddShoppingLocation}
+                                                        disabled={!newLocationName.trim()}
+                                                        className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 hover:bg-blue-700 transition-colors"
+                                                    >
+                                                        追加
+                                                    </button>
+                                                </div>
+                                                <ul className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                                    {userShoppingLocations.map(loc => (
+                                                        <li key={loc} className="flex justify-between items-center bg-white border border-gray-100 p-2 rounded-lg">
+                                                            <span className="text-sm text-gray-700">{loc}</span>
+                                                            <button
+                                                                onClick={() => handleDeleteShoppingLocation(loc)}
+                                                                className="text-red-400 hover:text-red-500 hover:bg-red-50 p-1 rounded transition-colors"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={editShoppingLocation}
+                                                onChange={(e) => setEditShoppingLocation(e.target.value)}
+                                                className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-4 px-4 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all appearance-none"
+                                            >
+                                                <option value="未分類">未分類</option>
+                                                {userShoppingLocations.map(loc => (
+                                                    <option key={loc} value={loc}>
+                                                        {loc}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </section>
+                                )}
 
                                 {/* 期限設定 */}
                                 <section>

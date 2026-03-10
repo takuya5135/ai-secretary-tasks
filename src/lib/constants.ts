@@ -40,3 +40,14 @@ export const PLACES = [
         activeBg: "bg-rose-500",
     },
 ];
+
+export const SHOPPING_LOCATIONS = [
+    "スーパー",
+    "100均",
+    "ドラッグストア",
+    "通販（Amazon・楽天等）",
+    "ホームセンター",
+    "コンビニ",
+    "家電量販店",
+    "その他"
+];

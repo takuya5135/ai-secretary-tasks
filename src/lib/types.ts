@@ -23,7 +23,6 @@ export interface GoogleTask {
     completed?: string;
 }
 
-// アプリケーション固有のメタデータ（Firestore等に保存するもの）
 export interface TaskMetadata {
     google_task_id: string;   // Google Tasks側のIDとの紐付けキー
     place: PlaceType;       // 1st, 2nd, 3rd (デフォルトは2nd)
@@ -35,9 +34,9 @@ export interface TaskMetadata {
     is_frog?: boolean;          // カエルを食べてしまえ機能
     created_at?: string;        // 新設 (ISO 8601)
     aiSuggestionLog?: Record<string, unknown>;
+    shopping_location?: string; // 買い物の場所（100均、スーパー、ドラッグストアなど）
 }
 
-// UIで扱い、GoogleTaskとメタデータが結合された統合型
 export interface AppTask {
     id: string;               // 内部的には GoogleTask.id を正とする
     title: string;
@@ -52,6 +51,7 @@ export interface AppTask {
     taskType: 'todo' | 'wish';  // 新設
     isFrog?: boolean;           // カエルを食べてしまえ機能
     createdAt?: string;          // 新設
+    shoppingLocation?: string;   // 買い物の場所
 }
 
 // AI秘書が参考にするためのユーザープロフィール情報
