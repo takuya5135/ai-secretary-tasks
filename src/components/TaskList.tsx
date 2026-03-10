@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
@@ -101,7 +101,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
             unsubscribeTasks();
             unsubscribeMeta();
         };
-    }, [user, db, googleAccessToken, googleRefreshToken]);
+    }, [user, googleAccessToken, googleRefreshToken]);
 
     // 2. データが更新されたらAppTask形式に結合・フィルタリング
     useEffect(() => {
@@ -132,7 +132,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         });
 
         // 並べ替えロジック
-        let sorted = [...filtered];
+        const sorted = [...filtered];
         if (sortMode === 'importance') {
             sorted.sort((a, b) => (b.importance || 0) - (a.importance || 0));
         } else if (sortMode === 'urgency') {
@@ -207,7 +207,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             // Googleに反映した変更をFirestoreキャッシュにも同期
             await syncData();
-        } catch (err: any) {
+        } catch (err) {
             console.error(err);
             alert("タスクの更新に失敗しました");
         } finally {
@@ -364,7 +364,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             // 削除結果をFirestoreキャッシュにも同期
             await syncData();
-        } catch (err: any) {
+        } catch (err) {
             console.error(err);
             alert("タスクの削除に失敗しました");
         } finally {
@@ -400,7 +400,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         if (currentIndex === -1) return;
 
         let targetPreviousId: string | null = null;
-        let newTasks = [...tasks];
+        const newTasks = [...tasks];
 
         // 移動先の「直前のタスク」を探す
         if (direction === 'top') {
@@ -507,7 +507,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 ].map(mode => (
                     <button
                         key={mode.id}
-                        onClick={() => setSortMode(mode.id as any)}
+                        onClick={() => setSortMode(mode.id as 'importance' | 'urgency' | 'dueDate' | 'createdAt' | 'manual')}
                         className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap border ${sortMode === mode.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white/50 text-gray-500 border-white/50 hover:bg-white'}`}
                     >
                         {mode.label}
@@ -775,7 +775,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100">
                                             <select
                                                 value={editRoutineConfig.type}
-                                                onChange={(e) => setEditRoutineConfig({ ...editRoutineConfig, type: e.target.value as any })}
+                                                onChange={(e) => setEditRoutineConfig({ ...editRoutineConfig, type: e.target.value as RoutineConfig['type'] })}
                                                 className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-green-500/20"
                                             >
                                                 <option value="daily">毎日</option>
