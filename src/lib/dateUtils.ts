@@ -56,3 +56,11 @@ export function calculateNextRoutineDate(currentDueISO: string | undefined, conf
 
     return nextDate;
 }
+
+export function getDaysSince(dateISO: string | undefined): number {
+    if (!dateISO) return 0;
+    const start = new Date(dateISO);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+}

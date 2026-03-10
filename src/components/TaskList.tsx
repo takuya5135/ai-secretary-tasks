@@ -10,10 +10,11 @@ import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import { Check, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles } from "lucide-react";
 import { PLACES, PlaceType } from "@/lib/constants";
-import { calculateNextRoutineDate } from "@/lib/dateUtils";
+import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
+import { Search } from "lucide-react";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -59,6 +60,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
     const [googleTasks, setGoogleTasks] = useState<GoogleTask[]>([]);
     const [taskMetadataMap, setTaskMetadataMap] = useState<Map<string, TaskMetadata>>(new Map());
+    const [searchQuery, setSearchQuery] = useState("");
+    const [editTaskType, setEditTaskType] = useState<'todo' | 'wish'>('todo');
 
     // 1. Firestoreからデータをリアルタイム購読
     useEffect(() => {
@@ -114,12 +117,19 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 urgency: meta?.urgency || 2,
                 isRoutine: meta?.is_routine || false,
                 routineConfig: meta?.routine_config || { type: 'none' },
+                taskType: meta?.task_type || 'todo',
+                createdAt: meta?.created_at,
             };
         });
 
-        const placeTasks = formattedTasks.filter(t => t.place === place);
-        setTasks(placeTasks);
-    }, [googleTasks, taskMetadataMap, place]);
+        const filtered = formattedTasks.filter(t => {
+            const matchPlace = t.place === place;
+            const matchSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (t.notes || "").toLowerCase().includes(searchQuery.toLowerCase());
+            return matchPlace && matchSearch;
+        });
+        setTasks(filtered);
+    }, [googleTasks, taskMetadataMap, place, searchQuery]);
 
     const handleUpdateMetadata = async () => {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
@@ -157,7 +167,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     urgency: editUrgency,
                     is_routine: editIsRoutine,
                     routine_config: editRoutineConfig,
-                    updated_at: new Date().toISOString()
+                    task_type: editTaskType,
+                    updated_at: new Date().toISOString(),
+                    // 新規作成時のみ created_at を設定するための配慮（既存ならそのまま）
+                    created_at: editingTask.createdAt || new Date().toISOString()
                 }, { merge: true });
             }
 
@@ -218,6 +231,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                             urgency: task.urgency,           // 緊急度を引き継ぐ
                             is_routine: task.isRoutine,
                             routine_config: task.routineConfig,
+                            task_type: task.taskType,
                             created_at: new Date().toISOString()
                         });
                     }
@@ -334,6 +348,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditPlace(task.place);
         setEditTitle(task.title);
         setEditNotes(task.notes || "");
+        setEditTaskType(task.taskType || 'todo');
     };
 
     const [showCompleted, setShowCompleted] = useState(false);
@@ -359,8 +374,20 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
     return (
         <div className="space-y-3 pb-24">
+            {/* 検索バー */}
+            <div className="relative mb-6">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                    type="text"
+                    placeholder="タスクを検索..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/50 backdrop-blur-sm border border-white/50 rounded-2xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all shadow-sm"
+                />
+            </div>
+
             {placeTasks.map(task => (
-                <div key={task.id} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-white/50 flex items-start gap-4 hover:shadow-md transition-shadow group">
+                <div key={task.id} className={`${task.taskType === 'wish' ? 'bg-pink-50/60 border-pink-100' : 'bg-white/80 border-white/50'} backdrop-blur-sm p-4 rounded-xl shadow-sm border flex items-start gap-4 hover:shadow-md transition-shadow group`}>
                     <button
                         onClick={(e) => handleCompleteTask(task, e)}
                         className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-green-50 hover:border-green-400 transition-colors"
@@ -368,12 +395,20 @@ export default function TaskList({ place }: { place: PlaceType }) {
                         <Check className="w-3 h-3 text-transparent group-hover:text-green-500 hover:text-green-600 transition-colors" />
                     </button>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEditModal(task)}>
-                        <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
+                        <div className="flex items-center gap-2">
+                            {task.taskType === 'wish' && <Sparkles className="w-3 h-3 text-pink-400 shrink-0" />}
+                            <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
+                        </div>
                         <div className="flex flex-wrap items-center gap-2 mt-3">
                             {task.dueDate && (
                                 <div className="flex items-center gap-1 text-[10px] text-gray-600 bg-gray-100 px-2 py-1 rounded-md">
                                     <Clock className="w-3 h-3" />
                                     <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                                </div>
+                            )}
+                            {task.createdAt && (
+                                <div className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md ${getDaysSince(task.createdAt) > 7 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-gray-50 text-gray-500 border border-gray-100'}`}>
+                                    <span>{getDaysSince(task.createdAt)}日経過</span>
                                 </div>
                             )}
                             <div className={`text-[10px] px-2 py-1 rounded-md border font-medium ${getImportanceStyles(task.importance).color}`}>
@@ -478,6 +513,25 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 px-4 text-sm min-h-[100px] focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all resize-none"
                                         placeholder="メモを入力してください..."
                                     />
+                                </section>
+
+                                {/* タスク分類設定 */}
+                                <section>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">タスク分類</label>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => setEditTaskType('todo')}
+                                            className={`flex-1 py-4 rounded-2xl border font-bold text-sm transition-all ${editTaskType === 'todo' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                        >
+                                            TODO (やるべき)
+                                        </button>
+                                        <button
+                                            onClick={() => setEditTaskType('wish')}
+                                            className={`flex-1 py-4 rounded-2xl border font-bold text-sm transition-all ${editTaskType === 'wish' ? 'bg-pink-500 text-white border-pink-500 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                        >
+                                            WISH (やりたい)
+                                        </button>
+                                    </div>
                                 </section>
 
                                 {/* 所属プレイス設定 */}

@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2 } from "lucide-react";
+import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2, ListChecks, Heart, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
@@ -190,48 +190,64 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         }
     }, [messages, hasSummarized]);
 
-    const handleSend = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        if (!input.trim() || isLoading || !user) return;
+    const handleQuickAction = async (action: 'summarize' | 'organize' | 'encourage') => {
+        setIsExpanded(true);
+        let prompt = "";
+        switch (action) {
+            case 'summarize':
+                prompt = "今日の予定とタスクを簡潔に要約して教えて。";
+                break;
+            case 'organize':
+                prompt = "今のタスクリストを見て、アイゼンハワーマトリクスや2分ルール、カエルを食べるなどの観点から、効率的な進め方をアドバイスして。大きすぎるタスクがあれば分割案も出して。";
+                break;
+            case 'encourage':
+                prompt = "ちょっと疲れたので、やる気が出るような言葉をかけて。";
+                break;
+        }
+        setInput(prompt);
+        // 少しディレイを置いてから送信（UIフィードバックのため）
+        setTimeout(() => handleSend(undefined, prompt), 100);
+    };
 
-        const userMessage: Message = { role: "user", content: input };
+    const handleSend = async (e?: React.FormEvent, overrideInput?: string) => {
+        e?.preventDefault();
+        const messageText = overrideInput || input;
+        if (!messageText.trim() || isLoading || !user) return;
+
+        const userMessage: Message = { role: "user", content: messageText };
         setMessages(prev => [...prev, userMessage]);
         setInput("");
         setIsLoading(true);
 
         try {
-            // ローカルストレージ内のキャッシュからタスクとカレンダーを取得 (無い場合は空配列)
-            // SWRを採用しているため、基本的にはキャッシュされている前提
             let tasksCache = [];
             let calCache = [];
 
-            try {
-                if (user && db) {
-                    const calDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "calendar"));
-                    if (calDoc.exists()) {
-                        calCache = calDoc.data().events || [];
-                    }
-
-                    const tasksDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "tasks"));
-                    if (tasksDoc.exists()) {
-                        const googleTasks = tasksDoc.data().items || [];
-                        const metaSnap = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
-                        const metadataMap = new Map();
-                        metaSnap.forEach(snap => metadataMap.set(snap.id, snap.data()));
-
-                        tasksCache = googleTasks.map((t: any) => {
-                            const meta = metadataMap.get(t.id);
-                            return {
-                                ...t,
-                                place: meta?.place || "2nd",
-                                importance: meta?.importance || 2,
-                                urgency: meta?.urgency || 2
-                            };
-                        });
-                    }
+            if (user && db) {
+                const calDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "calendar"));
+                if (calDoc.exists()) {
+                    calCache = calDoc.data().events || [];
                 }
-            } catch (e) {
-                console.warn("Failed to read context from Firestore for AI Chat", e);
+
+                const tasksDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "tasks"));
+                if (tasksDoc.exists()) {
+                    const googleTasks = tasksDoc.data().items || [];
+                    const metaSnap = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
+                    const metadataMap = new Map();
+                    metaSnap.forEach(snap => metadataMap.set(snap.id, snap.data()));
+
+                    tasksCache = googleTasks.map((t: any) => {
+                        const meta = metadataMap.get(t.id);
+                        return {
+                            ...t,
+                            place: meta?.place || "2nd",
+                            importance: meta?.importance || 2,
+                            urgency: meta?.urgency || 2,
+                            taskType: meta?.task_type || 'todo',
+                            createdAt: meta?.created_at
+                        };
+                    });
+                }
             }
 
             const res = await fetch("/api/ai/chat", {
@@ -243,7 +259,8 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                     contextData: {
                         tasks: tasksCache,
                         calendarEvents: calCache
-                    }
+                    },
+                    mode: overrideInput ? 'action' : 'chat' // モードを付与
                 })
             });
 
@@ -296,6 +313,31 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                 )}
 
                 {isExpanded ? <ChevronDown className="absolute right-6 w-5 h-5 text-gray-400" /> : <ChevronUp className="absolute right-6 w-5 h-5 text-gray-400" />}
+            </div>
+
+            {/* クイックアクションボタン */}
+            <div className={`px-6 py-3 flex gap-2 overflow-x-auto no-scrollbar shrink-0 transition-opacity duration-300 ${isExpanded ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                <button
+                    onClick={() => handleQuickAction('summarize')}
+                    className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm"
+                >
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    今日の要約
+                </button>
+                <button
+                    onClick={() => handleQuickAction('organize')}
+                    className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-indigo-100 transition-colors border border-indigo-100 shadow-sm"
+                >
+                    <ListChecks className="w-3.5 h-3.5" />
+                    タスク整理・分割
+                </button>
+                <button
+                    onClick={() => handleQuickAction('encourage')}
+                    className="flex items-center gap-2 bg-pink-50 text-pink-700 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-pink-100 transition-colors border border-pink-100 shadow-sm"
+                >
+                    <Heart className="w-3.5 h-3.5" />
+                    励まして
+                </button>
             </div>
 
             {/* チャット履歴 (展開時のみ表示) */}

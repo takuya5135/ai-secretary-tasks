@@ -34,19 +34,26 @@ export async function POST(request: Request) {
 2. 雑談も歓迎しますが、会話の中からタスク（やるべきこと）が見つかったら、積極的に登録を提案してください。
 3. ユーザーが疲れていそうなら励ましの言葉をかけてください。
 4. 回答は簡潔に（スマホで読みやすい長さ）にしてください。
-5. もしタスクを抽出した場合は、文末に [TASK_PROPOSED: {"title": "...", "importance": 2, "urgency": 2, "place": "2nd"}] のような形式でヒントを含めても良いです。
+5. タスクのアドバイスを求められた際は、以下の概念を適宜活用してください：
+   - アイゼンハワーマトリクス: 重要度と緊急度に基づく優先順位付け。
+   - 2分ルール: すぐに終わるタスクは今すぐやるよう促す。
+   - カエルを食べる: 最も気が進まない、あるいは最も重要な大きなタスクを朝一番に片付ける提案。
+   - タスク分割: 大きすぎるタスク（Big Frog）を、具体的な小さなステップに分ける提案。
+6. タスクには「TODO（やるべき）」と「WISH（やりたい）」があります。WISHは無理強いせず、心のゆとりとして扱ってください。
+7. 作成日から時間が経過しているタスクがあれば、必要性を優しく確認してください。
+8. もしタスクを抽出した場合は、文末に [TASK_PROPOSED: {"title": "...", "importance": 2, "urgency": 2, "place": "2nd", "task_type": "todo"}] のような形式でヒントを含めても良いです。
 `,
         });
 
         const rawHistory = messages.slice(0, -1);
-        
+
         // Gemini APIの仕様: history は必ず user から始まり、user/model が交互であること
         const formattedHistory: { role: string; parts: { text: string }[] }[] = [];
         let expectedRole = "user";
 
         for (const msg of rawHistory) {
             const mappedRole = msg.role === "user" ? "user" : "model";
-            
+
             if (formattedHistory.length === 0 && mappedRole === "model") {
                 // historyの先頭がmodelの場合はスキップするか、ダミーのuser発言を入れる
                 // ここではUI仕様上「こんにちは！」というmodelの発言から始まるため、最初のmodel発言は握りつぶし、

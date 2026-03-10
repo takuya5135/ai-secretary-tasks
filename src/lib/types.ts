@@ -31,6 +31,8 @@ export interface TaskMetadata {
     urgency: number;        // 1 (低) ~ 4 (高)
     is_routine?: boolean;
     routine_config?: RoutineConfig;
+    task_type?: 'todo' | 'wish'; // 新設
+    created_at?: string;        // 新設 (ISO 8601)
     aiSuggestionLog?: Record<string, unknown>;
 }
 
@@ -46,6 +48,8 @@ export interface AppTask {
     urgency: number;
     isRoutine?: boolean;
     routineConfig?: RoutineConfig;
+    taskType: 'todo' | 'wish';  // 新設
+    createdAt?: string;          // 新設
 }
 
 // AI秘書が参考にするためのユーザープロフィール情報
