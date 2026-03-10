@@ -447,16 +447,16 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             initial={{ y: "100%", opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             exit={{ y: "100%", opacity: 0 }}
-                            className="bg-white px-6 py-4 pb-8 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.1)] rounded-t-[2.5rem] pointer-events-auto border-t border-gray-100 max-h-[85vh] overflow-y-auto"
+                            className="bg-white px-4 sm:px-6 py-4 pb-8 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.1)] rounded-t-[2.5rem] pointer-events-auto border-t border-gray-100 max-h-[85vh] overflow-y-auto"
                         >
                             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
 
                             <form onSubmit={handleAddTask} className="space-y-6">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 sm:gap-3">
                                     <button
                                         type="button"
                                         onClick={() => { setIsAddingTask(false); setShowDetails(false); }}
-                                        className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+                                        className="p-2 sm:p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors shrink-0"
                                     >
                                         <X className="w-5 h-5" />
                                     </button>
@@ -467,13 +467,13 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                         value={newTaskTitle}
                                         onChange={(e) => setNewTaskTitle(e.target.value)}
                                         disabled={isSubmitting}
-                                        className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-800"
+                                        className="flex-1 min-w-0 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-gray-800"
                                     />
                                     <button
                                         type="button"
                                         onClick={handleAIParse}
                                         disabled={!newTaskTitle.trim() || isSubmitting}
-                                        className="p-3.5 shrink-0 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                                        className="p-2.5 sm:p-3.5 shrink-0 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50"
                                     >
                                         <Sparkles className="w-5 h-5" />
                                     </button>
