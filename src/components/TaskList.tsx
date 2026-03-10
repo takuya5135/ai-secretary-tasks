@@ -417,19 +417,29 @@ export default function TaskList({ place }: { place: PlaceType }) {
             targetPreviousId = placeTasks[currentIndex + 1].id;
         }
 
-        // オプティミスティックUIの更新 (全タスクリスト tasks 内での位置を入れ替える)
-        const absoluteIndex = tasks.findIndex(t => t.id === taskId);
-        if (absoluteIndex !== -1) {
-            const [movedItem] = newTasks.splice(absoluteIndex, 1);
-            let insertAt = 0;
+        // オプティミスティック更新として Firestoreキャッシュの並び順を直接変更する
+        const originalGoogleTasks = [...googleTasks];
+        const gMovedIndex = originalGoogleTasks.findIndex(t => t.id === taskId);
+
+        if (gMovedIndex !== -1) {
+            const currentGoogleTasks = [...originalGoogleTasks];
+            const [movedItem] = currentGoogleTasks.splice(gMovedIndex, 1);
+            let insertIndex = 0;
             if (targetPreviousId === null) {
-                insertAt = 0;
+                insertIndex = 0;
             } else {
-                const prevIdx = newTasks.findIndex(t => t.id === targetPreviousId);
-                insertAt = prevIdx + 1;
+                const prevGoogleIndex = currentGoogleTasks.findIndex(t => t.id === targetPreviousId);
+                insertIndex = prevGoogleIndex !== -1 ? prevGoogleIndex + 1 : 0;
             }
-            newTasks.splice(insertAt, 0, movedItem);
-            setTasks(newTasks);
+            currentGoogleTasks.splice(insertIndex, 0, movedItem);
+
+            // Firestoreのキャッシュを更新 (これが onSnapshot 経由で UI を即座に更新する)
+            if (db) {
+                await setDoc(doc(db, "users", user.uid, "google_cache", "tasks"), {
+                    items: currentGoogleTasks,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            }
         }
 
         try {
@@ -445,13 +455,18 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             if (!res.ok) throw new Error("Failed to move task");
 
-            // Googleリソースの反映(Eventual Consistency)を待つため少し待機
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            await syncData();
+            // イベントの反映(Eventual Consistency)待ちで syncData を呼ぶと古い順序に戻るため、
+            // ここでは syncData() は呼ばず、ローカルキャッシュの順序をそのまま活かす
         } catch (err) {
             console.error(err);
             setError("移動に失敗しました");
-            await syncData();
+            // エラー時は元の順序に戻す
+            if (db) {
+                await setDoc(doc(db, "users", user.uid, "google_cache", "tasks"), {
+                    items: originalGoogleTasks,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            }
         }
     };
     const completedTasks = tasks.filter(t => t.status === "completed");
