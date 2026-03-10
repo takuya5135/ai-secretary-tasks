@@ -5,9 +5,10 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
-import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut } from "lucide-react";
+import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity } from "lucide-react";
 import TaskList from "./TaskList";
 import ChatBuddy from "./ChatBuddy";
+import WeightTracker from "./WeightTracker";
 import { useAuth } from "@/contexts/AuthContext";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -46,6 +47,9 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
     // ユーザーメニュー(ログアウト等)の開閉State
     const [showUserMenu, setShowUserMenu] = useState(false);
+
+    // 体重管理ミニアプリの開閉State
+    const [showWeightTracker, setShowWeightTracker] = useState(false);
 
     const activePlaceIndex = PLACES.findIndex(p => p.id === activePlaceId);
     const activePlace = PLACES[activePlaceIndex];
@@ -211,6 +215,14 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             ) : (
                                 <User className="w-5 h-5 text-gray-600" />
                             )}
+                        </button>
+
+                        <button
+                            onClick={() => setShowWeightTracker(true)}
+                            className="w-10 h-10 rounded-full bg-pink-50 text-pink-500 border border-pink-100 shadow-sm flex items-center justify-center hover:bg-pink-100 transition-colors active:scale-95 shrink-0"
+                            title="体重管理を開く"
+                        >
+                            <Activity className="w-5 h-5" />
                         </button>
 
                         <AnimatePresence>
@@ -560,6 +572,11 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             </div>
                         </motion.div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+            <AnimatePresence>
+                {showWeightTracker && (
+                    <WeightTracker onClose={() => setShowWeightTracker(false)} />
                 )}
             </AnimatePresence>
         </div>
