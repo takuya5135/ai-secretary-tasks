@@ -134,22 +134,25 @@ export default function TaskList({ place }: { place: PlaceType }) {
         });
 
         // 並べ替えロジック
-        const sorted = [...filtered].sort((a, b) => {
-            if (sortMode === 'manual') return 0;
-            if (sortMode === 'importance') return (b.importance || 0) - (a.importance || 0);
-            if (sortMode === 'urgency') return (b.urgency || 0) - (a.urgency || 0);
-            if (sortMode === 'dueDate') {
+        let sorted = [...filtered];
+        if (sortMode === 'importance') {
+            sorted.sort((a, b) => (b.importance || 0) - (a.importance || 0));
+        } else if (sortMode === 'urgency') {
+            sorted.sort((a, b) => (b.urgency || 0) - (a.urgency || 0));
+        } else if (sortMode === 'dueDate') {
+            sorted.sort((a, b) => {
                 if (!a.dueDate) return 1;
                 if (!b.dueDate) return -1;
                 return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-            }
-            if (sortMode === 'createdAt') {
+            });
+        } else if (sortMode === 'createdAt') {
+            sorted.sort((a, b) => {
                 if (!a.createdAt) return 1;
                 if (!b.createdAt) return -1;
                 return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-            }
-            return 0;
-        });
+            });
+        }
+        // sortMode === 'manual' の場合は、map時の順序（Google API由来）をそのまま維持する
 
         setTasks(sorted);
     }, [googleTasks, taskMetadataMap, place, searchQuery, sortMode]);
@@ -388,23 +391,35 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const handleMoveTask = async (taskId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
-        // placeTasks (現在表示されている未完了タスク) 内でのインデックスを探す
-        const currentIndex = placeTasks.findIndex(t => t.id === taskId);
+        // placeTasks ではなく全タスクリスト (tasks) 内でのインデックスを探す (完了済みタスクも含めた絶対順序を保つため)
+        const currentIndex = tasks.findIndex(t => t.id === taskId);
         if (currentIndex === -1) return;
 
         let previousId: string | null = null;
+        let newTasks = [...tasks];
 
         if (direction === 'top') {
-            previousId = null; // 先頭へ
+            previousId = null;
+            const [movedItem] = newTasks.splice(currentIndex, 1);
+            newTasks.unshift(movedItem);
         } else if (direction === 'bottom') {
-            previousId = placeTasks[placeTasks.length - 1].id;
+            previousId = tasks[tasks.length - 1].id;
+            const [movedItem] = newTasks.splice(currentIndex, 1);
+            newTasks.push(movedItem);
         } else if (direction === 'up') {
             if (currentIndex === 0) return;
-            previousId = currentIndex === 1 ? null : placeTasks[currentIndex - 2].id;
+            previousId = currentIndex === 1 ? null : tasks[currentIndex - 2].id;
+            const [movedItem] = newTasks.splice(currentIndex, 1);
+            newTasks.splice(currentIndex - 1, 0, movedItem);
         } else if (direction === 'down') {
-            if (currentIndex === placeTasks.length - 1) return;
-            previousId = placeTasks[currentIndex + 1].id;
+            if (currentIndex === tasks.length - 1) return;
+            previousId = tasks[currentIndex + 1].id;
+            const [movedItem] = newTasks.splice(currentIndex, 1);
+            newTasks.splice(currentIndex + 1, 0, movedItem);
         }
+
+        // オプティミスティックUI更新
+        setTasks(newTasks);
 
         try {
             const res = await fetch("/api/tasks", {
@@ -418,10 +433,13 @@ export default function TaskList({ place }: { place: PlaceType }) {
             });
 
             if (!res.ok) throw new Error("Failed to move task");
-            await syncData(); // 同期をトリガー
+
+            // 同期をトリガー (確実にバックエンドと合わせる)
+            await syncData();
         } catch (err) {
             console.error(err);
             setError("移動に失敗しました");
+            await syncData(); // エラー時は再同期して元の順序に戻す
         }
     };
 
@@ -682,8 +700,8 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                         type="button"
                                         onClick={() => setEditIsFrog(!editIsFrog)}
                                         className={`w-full py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 font-bold ${editIsFrog
-                                                ? 'bg-green-50 border-green-200 text-green-700 shadow-inner'
-                                                : 'bg-white border-gray-100 text-gray-400 hover:border-green-100 hover:text-green-500'
+                                            ? 'bg-green-50 border-green-200 text-green-700 shadow-inner'
+                                            : 'bg-white border-gray-100 text-gray-400 hover:border-green-100 hover:text-green-500'
                                             }`}
                                     >
                                         <span className="text-xl">{editIsFrog ? '🐸' : '🐸'}</span>
