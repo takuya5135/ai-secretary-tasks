@@ -442,8 +442,17 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     placeholder="タスクを検索..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white/50 backdrop-blur-sm border border-white/50 rounded-2xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all shadow-sm"
+                    className="w-full bg-white/50 backdrop-blur-sm border border-white/50 rounded-2xl py-3 pl-12 pr-10 text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition-all shadow-sm"
                 />
+                {searchQuery && (
+                    <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-all active:scale-90"
+                        title="検索をクリア"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
             </div>
 
             {/* 並べ替えスイッチ */}
