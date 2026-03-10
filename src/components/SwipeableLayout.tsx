@@ -473,7 +473,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                         type="button"
                                         onClick={handleAIParse}
                                         disabled={!newTaskTitle.trim() || isSubmitting}
-                                        className="p-3.5 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                                        className="p-3.5 shrink-0 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50"
                                     >
                                         <Sparkles className="w-5 h-5" />
                                     </button>

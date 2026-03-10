@@ -399,7 +399,6 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
     const handleDeleteTask = async (taskId: string) => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
-        if (!confirm("このタスクを完全に削除しますか？")) return;
 
         setIsUpdating(true);
         try {
