@@ -511,7 +511,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
                     {/* 手動並べ替えボタン (標準モードの時のみ表示) */}
                     {sortMode === 'manual' && (
-                        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                        <div className="flex flex-col gap-1 opacity-100 transition-opacity self-center shrink-0 bg-gray-50/50 p-1 rounded-lg border border-gray-100 shadow-sm mr-1">
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'top'); }}
                                 className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
@@ -591,10 +591,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             <AnimatePresence>
                 {editingTask && (
-                    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm overflow-y-auto pt-20">
+                    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm pt-20">
                         <motion.div
                             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-                            className="bg-white w-full max-w-lg rounded-t-[2.5rem] p-8 shadow-2xl relative min-h-[70vh] flex flex-col"
+                            className="bg-white w-full max-w-lg rounded-t-[2.5rem] p-8 shadow-2xl relative max-h-[92vh] flex flex-col"
                         >
                             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 shrink-0" />
                             <button onClick={() => setEditingTask(null)} className="absolute right-6 top-8 p-2 text-gray-400 hover:bg-gray-100 rounded-full"><X /></button>
@@ -774,12 +774,18 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                 </section>
                             </div>
 
-                            <div className="mt-8 shrink-0">
+                            <div className="mt-8 shrink-0 flex flex-col gap-3">
                                 <button
                                     onClick={handleUpdateMetadata} disabled={isUpdating}
-                                    className="w-full bg-gray-900 text-white font-bold py-4 rounded-3xl shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95"
+                                    className="w-full bg-slate-900 text-white font-bold py-4 rounded-3xl shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95"
                                 >
                                     {isUpdating ? <Loader2 className="w-5 h-5 animate-spin" /> : "設定をすべて保存"}
+                                </button>
+                                <button
+                                    onClick={() => setEditingTask(null)}
+                                    className="w-full bg-gray-50 text-gray-500 font-bold py-4 rounded-3xl hover:bg-gray-100 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    キャンセルして閉じる
                                 </button>
                             </div>
                         </motion.div>
