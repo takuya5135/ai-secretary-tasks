@@ -62,7 +62,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [taskMetadataMap, setTaskMetadataMap] = useState<Map<string, TaskMetadata>>(new Map());
     const [searchQuery, setSearchQuery] = useState("");
     const [editTaskType, setEditTaskType] = useState<'todo' | 'wish'>('todo');
-    const [sortMode, setSortMode] = useState<'importance' | 'urgency' | 'dueDate' | 'createdAt' | 'manual'>('importance');
+    const [sortMode, setSortMode] = useState<'importance' | 'urgency' | 'dueDate' | 'createdAt' | 'manual'>('manual');
 
     // 1. Firestoreからデータをリアルタイム購読
     useEffect(() => {
@@ -453,11 +453,11 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     <span className="text-[10px] font-bold uppercase tracking-wider">Sort:</span>
                 </div>
                 {[
+                    { id: 'manual', label: '標準' },
                     { id: 'importance', label: '重要度' },
                     { id: 'urgency', label: '緊急度' },
                     { id: 'dueDate', label: '期限' },
-                    { id: 'createdAt', label: '作成日' },
-                    { id: 'manual', label: '標準' }
+                    { id: 'createdAt', label: '作成日' }
                 ].map(mode => (
                     <button
                         key={mode.id}
