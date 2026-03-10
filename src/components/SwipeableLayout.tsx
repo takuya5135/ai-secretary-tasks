@@ -45,6 +45,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
     // AI提案用のState
     const [proposedTasks, setProposedTasks] = useState<AIParsedTask[] | null>(null);
+    const [selectedTaskIndices, setSelectedTaskIndices] = useState<Set<number>>(new Set());
 
     // ユーザーメニュー(ログアウト等)の開閉State
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -142,6 +143,8 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
             if (!res.ok) throw new Error("AI解析に失敗しました");
             const data = await res.json();
             setProposedTasks(data.tasks);
+            // 最初は全て選択された状態にする
+            setSelectedTaskIndices(new Set(data.tasks.map((_: any, idx: number) => idx)));
         } catch (error) {
             console.error("AI Parse Error:", error);
             alert("AIによる解析ができませんでした。APIキーの設定を確認してください。");
@@ -155,7 +158,10 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
         if (!proposedTasks || !user || (!googleAccessToken && !googleRefreshToken)) return;
         setIsSubmitting(true);
         try {
-            for (const task of proposedTasks) {
+            for (let i = 0; i < proposedTasks.length; i++) {
+                if (!selectedTaskIndices.has(i)) continue; // 選択されていないタスクはスキップ
+
+                const task = proposedTasks[i];
                 // 1. Google Tasksに追加
                 const headers: Record<string, string> = {
                     "Content-Type": "application/json",
@@ -562,31 +568,50 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                {proposedTasks.map((task, idx) => (
-                                    <div key={idx} className="bg-gray-50 rounded-xl p-4 border border-gray-200/50">
-                                        <div className="flex justify-between items-start gap-3">
-                                            <h4 className="font-bold text-gray-900 text-sm">{task.title}</h4>
-                                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${task.place === "1st" ? "bg-green-50 text-green-700 border-green-200" :
-                                                task.place === "2nd" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                                    task.place === "3rd" ? "bg-purple-50 text-purple-700 border-purple-200" :
-                                                        "bg-rose-50 text-rose-700 border-rose-200"
-                                                }`}>
-                                                {task.place === "1st" ? "Home" : task.place === "2nd" ? "Work" : task.place === "3rd" ? "Hobby" : "Shopping"}
-                                            </span>
+                                {proposedTasks.map((task, idx) => {
+                                    const isSelected = selectedTaskIndices.has(idx);
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => {
+                                                const newSet = new Set(selectedTaskIndices);
+                                                if (isSelected) newSet.delete(idx);
+                                                else newSet.add(idx);
+                                                setSelectedTaskIndices(newSet);
+                                            }}
+                                            className={`rounded-xl p-4 border cursor-pointer transition-all flex gap-4 ${isSelected ? 'bg-indigo-50/30 border-indigo-200 shadow-sm' : 'bg-gray-50/50 border-gray-100 opacity-60 grayscale-[0.5]'}`}
+                                        >
+                                            <div className="pt-0.5 shrink-0">
+                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-gray-300'}`}>
+                                                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start gap-3">
+                                                    <h4 className={`font-bold text-sm ${isSelected ? 'text-gray-900' : 'text-gray-500 line-through decoration-gray-300'}`}>{task.title}</h4>
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${task.place === "1st" ? "bg-green-50 text-green-700 border-green-200" :
+                                                        task.place === "2nd" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                                            task.place === "3rd" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                                                "bg-rose-50 text-rose-700 border-rose-200"
+                                                        }`}>
+                                                        {task.place === "1st" ? "Home" : task.place === "2nd" ? "Work" : task.place === "3rd" ? "Hobby" : "Shopping"}
+                                                    </span>
+                                                </div>
+                                                {task.notes && <p className="text-xs mt-1 text-gray-500">{task.notes}</p>}
+                                                <div className="flex gap-2 mt-2">
+                                                    <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-400">
+                                                        重要度: {task.importance} / 緊急度: {task.urgency}
+                                                    </span>
+                                                    {task.dueDate && (
+                                                        <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-400">
+                                                            期限: {new Date(task.dueDate).toLocaleDateString()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        {task.notes && <p className="text-xs text-gray-500 mt-1">{task.notes}</p>}
-                                        <div className="flex gap-2 mt-2">
-                                            <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-400">
-                                                重要度: {task.importance} / 緊急度: {task.urgency}
-                                            </span>
-                                            {task.dueDate && (
-                                                <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-400">
-                                                    期限: {new Date(task.dueDate).toLocaleDateString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="p-6 bg-gray-50 border-t border-gray-100">
@@ -598,7 +623,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                     {isSubmitting ? (
                                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     ) : (
-                                        <>全部まとめて登録する</>
+                                        <>{selectedTaskIndices.size === 0 ? "選択されていません" : `${selectedTaskIndices.size}件のタスクを登録する`}</>
                                     )}
                                 </button>
                             </div>
