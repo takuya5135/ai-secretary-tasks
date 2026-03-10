@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
-import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity } from "lucide-react";
+import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity, Check } from "lucide-react";
 import TaskList from "./TaskList";
 import ChatBuddy from "./ChatBuddy";
 import WeightTracker from "./WeightTracker";

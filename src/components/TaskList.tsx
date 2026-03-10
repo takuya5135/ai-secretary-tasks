@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import {
     Check, Clock, AlertTriangle, Calendar as CalendarIcon,
-    MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles,
+    Loader2, RotateCw, X, Trash2, Sparkles,
     ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
     Search, ArrowUpDown
 } from "lucide-react";
@@ -462,7 +462,6 @@ export default function TaskList({ place }: { place: PlaceType }) {
         if (currentIndex === -1) return;
 
         let targetPreviousId: string | null = null;
-        const newTasks = [...tasks];
 
         // 移動先の「直前のタスク」を探す
         if (direction === 'top') {
