@@ -22,6 +22,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
+    "canvas-confetti": "^1.9.3",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -29,6 +30,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/canvas-confetti": "^1.6.4",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
     "tailwindcss": "^4",
