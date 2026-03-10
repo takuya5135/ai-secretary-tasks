@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getGoogleTasksClient } from "@/lib/google/tasks";
 
+export const dynamic = "force-dynamic";
+
 // Google Tasksからタスク一覧を取得するAPIエンドポイント
 export async function GET(request: Request) {
     try {

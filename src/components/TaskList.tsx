@@ -444,6 +444,9 @@ export default function TaskList({ place }: { place: PlaceType }) {
             });
 
             if (!res.ok) throw new Error("Failed to move task");
+
+            // Googleリソースの反映(Eventual Consistency)を待つため少し待機
+            await new Promise(resolve => setTimeout(resolve, 1500));
             await syncData();
         } catch (err) {
             console.error(err);

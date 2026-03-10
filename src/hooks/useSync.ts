@@ -21,10 +21,11 @@ export function useSync() {
             if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
             if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
-            // 1. Google APIから最新データをフェッチ
+            // 1. Google APIから最新データをフェッチ (キャッシュ無効化)
+            const timestamp = Date.now();
             const [tasksRes, calRes] = await Promise.all([
-                fetch("/api/tasks", { headers }),
-                fetch("/api/calendar", { headers })
+                fetch(`/api/tasks?_t=${timestamp}`, { headers, cache: "no-store" }),
+                fetch(`/api/calendar?_t=${timestamp}`, { headers, cache: "no-store" })
             ]);
 
             if (!tasksRes.ok) throw new Error("Failed to fetch tasks from Google API");
