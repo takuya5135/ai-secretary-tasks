@@ -10,12 +10,13 @@ export type AIParsedTask = {
     urgency: number; // 1-4
     place: "1st" | "2nd" | "3rd" | "4th";
     isFrog?: boolean;
+    shoppingLocation?: string;
 };
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { prompt, userProfile } = body;
+        const { prompt, userProfile, shoppingLocations } = body;
 
         if (!prompt) {
             return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
 - urgency: 緊急度 (1:低い, 2:中, 3:高い, 4:極めて高い)
 - place: 実行場所・コンテキスト ("1st": 自宅/パーソナル, "2nd": 職場/学校, "3rd": 趣味/サードプレイス, "4th": 買い物/ショッピング から最適と推測されるもの。デフォルトは "2nd")
 - isFrog: カエル設定 (boolean。ユーザーが「やりたくない」「嫌だ」「気が重い」など、心理的に負担を感じていそうなタスクに対して true を設定。迷ったら false)
+- shoppingLocation: 買い物の場所（placeが"4th"の場合のみ。以下のリストから最も適切なものを選択するか、リストにない場合は推測して設定 ${JSON.stringify(shoppingLocations || [])}）
 
 必ず純粋なJSON配列（[...]）のみを出力してください。Markdownの装飾は不要です。
 `;

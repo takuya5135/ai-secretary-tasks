@@ -5,9 +5,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2, ListChecks, Heart, LayoutDashboard } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { SHOPPING_LOCATIONS } from "@/lib/constants";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Message = {
     role: "user" | "assistant";
@@ -223,6 +224,8 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             let tasksCache = [];
             let calCache = [];
 
+            let shoppingLocs = SHOPPING_LOCATIONS;
+
             if (user && db) {
                 const calDoc = await getDoc(doc(db, "users", user.uid, "google_cache", "calendar"));
                 if (calDoc.exists()) {
@@ -248,6 +251,11 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                         };
                     });
                 }
+
+                const shoppingDoc = await getDoc(doc(db, "users", user.uid, "settings", "shopping"));
+                if (shoppingDoc.exists() && Array.isArray(shoppingDoc.data().locations)) {
+                    shoppingLocs = shoppingDoc.data().locations;
+                }
             }
 
             const res = await fetch("/api/ai/chat", {
@@ -258,7 +266,8 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                     userProfile: profile,
                     contextData: {
                         tasks: tasksCache,
-                        calendarEvents: calCache
+                        calendarEvents: calCache,
+                        shoppingLocations: shoppingLocs
                     },
                     mode: overrideInput ? 'action' : 'chat' // モードを付与
                 })

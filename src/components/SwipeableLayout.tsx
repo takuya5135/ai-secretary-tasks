@@ -5,16 +5,17 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlaceType, PLACES } from "@/lib/constants";
-import { Mic, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity, Check } from "lucide-react";
+import { Mic, MicOff, Plus, Send, X, Sparkles, Zap, AlertCircle, RotateCw, Calendar as CalendarIcon, ChevronDown, ChevronUp, User, LogOut, Activity, Check } from "lucide-react";
 import TaskList from "./TaskList";
 import ChatBuddy from "./ChatBuddy";
 import WeightTracker from "./WeightTracker";
-import { useAuth } from "@/contexts/AuthContext";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AIParsedTask } from "@/app/api/ai/parse-task/route";
+import { SHOPPING_LOCATIONS } from "@/lib/constants";
 import { RoutineConfig } from "@/lib/types";
 import { useSync } from "@/hooks/useSync";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () => void }) {
     const { user, profile, googleAccessToken, googleRefreshToken, signOut, connectGoogleTasks } = useAuth();
@@ -26,6 +27,11 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     const [newTaskTitle, setNewTaskTitle] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showDetails, setShowDetails] = useState(false); // 詳細設定の開閉
+
+    // 音声入力用のState
+    const [isListening, setIsListening] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognitionRef = React.useRef<any>(null);
 
     // データ同期用フック
     const { syncData, syncError, isSyncing } = useSync();
@@ -56,10 +62,69 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     const activePlaceIndex = PLACES.findIndex(p => p.id === activePlaceId);
     const activePlace = PLACES[activePlaceIndex];
 
+    const [userShoppingLocations, setUserShoppingLocations] = useState<string[]>(SHOPPING_LOCATIONS);
+
+    // カスタムショッピング場所の取得
+    useEffect(() => {
+        if (!user || !db) return;
+
+        const unsubscribeSettings = onSnapshot(doc(db, "users", user.uid, "settings", "shopping"), (docSnap) => {
+            if (docSnap.exists() && Array.isArray(docSnap.data().locations)) {
+                setUserShoppingLocations(docSnap.data().locations);
+            } else {
+                setUserShoppingLocations(SHOPPING_LOCATIONS);
+            }
+        }, (err) => {
+            console.error("Failed to fetch shopping locations", err);
+        });
+
+        return () => unsubscribeSettings();
+    }, [user]);
+
     // タブ切り替えハンドラ
     const handleTabClick = (id: PlaceType) => {
         setActivePlaceId(id);
         setIsAddingTask(false); // タブを切り替えたら入力バーを閉じる
+    };
+
+    // 音声認識 (STT) のセットアップ
+    useEffect(() => {
+        if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.lang = "ja-JP";
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            recognitionRef.current.onresult = (event: any) => {
+                const transcript = event.results[0][0].transcript;
+                setNewTaskTitle(transcript); // 認識したテキストをセット
+                setIsAddingTask(true); // 入力バーを開く
+                setIsListening(false);
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            recognitionRef.current.onerror = (event: any) => {
+                console.error("Speech recognition error in layout", event.error);
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onend = () => {
+                setIsListening(false);
+            };
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (isListening) {
+            recognitionRef.current?.stop();
+        } else {
+            setNewTaskTitle(""); // 音声入力開始時にクリア
+            recognitionRef.current?.start();
+            setIsListening(true);
+        }
     };
 
     // タスク追加処理
@@ -137,7 +202,8 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     prompt: newTaskTitle,
-                    userProfile: profile
+                    userProfile: profile,
+                    shoppingLocations: userShoppingLocations
                 })
             });
             if (!res.ok) throw new Error("AI解析に失敗しました");
@@ -189,6 +255,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         importance: task.importance,
                         urgency: task.urgency,
                         is_frog: task.isFrog || false,
+                        shopping_location: task.shoppingLocation || null,
                         created_at: new Date().toISOString()
                     });
                 }
@@ -521,8 +588,11 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                             className="absolute bottom-8 right-6 flex items-center justify-end gap-3"
                         >
                             {/* 音声入力ボタン */}
-                            <button className="w-14 h-14 bg-white text-gray-700 rounded-full shadow-lg border border-gray-100 flex items-center justify-center pointer-events-auto hover:bg-gray-50 active:scale-95 transition-all">
-                                <Mic className="w-6 h-6" />
+                            <button
+                                onClick={toggleListening}
+                                className={`w-14 h-14 rounded-full shadow-lg border flex items-center justify-center pointer-events-auto transition-all active:scale-95 ${isListening ? "bg-red-500 text-white border-red-500" : "bg-white text-gray-700 border-gray-100 hover:bg-gray-50"}`}
+                            >
+                                {isListening ? <MicOff className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
                             </button>
                             {/* テキスト追加ボタン */}
                             <button
@@ -596,6 +666,11 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                                         }`}>
                                                         {task.place === "1st" ? "Home" : task.place === "2nd" ? "Work" : task.place === "3rd" ? "Hobby" : "Shopping"}
                                                     </span>
+                                                    {task.place === "4th" && task.shoppingLocation && (
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full border shrink-0 bg-yellow-50 text-yellow-700 border-yellow-200">
+                                                            {task.shoppingLocation}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {task.notes && <p className="text-xs mt-1 text-gray-500">{task.notes}</p>}
                                                 <div className="flex gap-2 mt-2">
