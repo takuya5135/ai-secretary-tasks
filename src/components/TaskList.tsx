@@ -10,7 +10,7 @@ import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import { Check, Clock, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles } from "lucide-react";
+import { Calendar as CalendarIcon, MoreVertical, Loader2, RotateCw, X, Trash2, Sparkles, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown } from "lucide-react";
 import { PLACES, PlaceType } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
@@ -371,6 +371,46 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditTaskType(task.taskType || 'todo');
     };
 
+    const handleMoveTask = async (taskId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+        if (!user || (!googleAccessToken && !googleRefreshToken)) return;
+
+        // placeTasks (現在表示されている未完了タスク) 内でのインデックスを探す
+        const currentIndex = placeTasks.findIndex(t => t.id === taskId);
+        if (currentIndex === -1) return;
+
+        let previousId: string | null = null;
+
+        if (direction === 'top') {
+            previousId = null; // 先頭へ
+        } else if (direction === 'bottom') {
+            previousId = placeTasks[placeTasks.length - 1].id;
+        } else if (direction === 'up') {
+            if (currentIndex === 0) return;
+            previousId = currentIndex === 1 ? null : placeTasks[currentIndex - 2].id;
+        } else if (direction === 'down') {
+            if (currentIndex === placeTasks.length - 1) return;
+            previousId = placeTasks[currentIndex + 1].id;
+        }
+
+        try {
+            const res = await fetch("/api/tasks", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${googleAccessToken}`,
+                    "x-google-refresh-token": googleRefreshToken || ""
+                },
+                body: JSON.stringify({ id: taskId, previous: previousId })
+            });
+
+            if (!res.ok) throw new Error("Failed to move task");
+            await syncData(); // 同期をトリガー
+        } catch (err) {
+            console.error(err);
+            setError("移動に失敗しました");
+        }
+    };
+
     const [showCompleted, setShowCompleted] = useState(false);
 
     const placeTasks = tasks.filter(t => t.status === "needsAction");
@@ -468,6 +508,40 @@ export default function TaskList({ place }: { place: PlaceType }) {
                             )}
                         </div>
                     </div>
+
+                    {/* 手動並べ替えボタン (標準モードの時のみ表示) */}
+                    {sortMode === 'manual' && (
+                        <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'top'); }}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                title="一番上へ"
+                            >
+                                <ChevronsUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'up'); }}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                title="一つ上へ"
+                            >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'down'); }}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                title="一つ下へ"
+                            >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'bottom'); }}
+                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                                title="一番下へ"
+                            >
+                                <ChevronsDown className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             ))}
 

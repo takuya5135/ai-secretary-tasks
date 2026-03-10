@@ -191,3 +191,44 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: "Failed to delete task", details: errorMessage }, { status });
     }
 }
+// Google Tasksを移動（並べ替え）するエンドポイント
+export async function PUT(request: Request) {
+    try {
+        const authHeader = request.headers.get("Authorization");
+        const refreshTokenHeader = request.headers.get("x-google-refresh-token");
+
+        const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+        if (!token && !refreshTokenHeader) {
+            return NextResponse.json({ error: "Unauthorized: Missing Google Tokens" }, { status: 401 });
+        }
+
+        const body = await request.json();
+        const { id, previous } = body; // previous: 移動先の直前のタスクID（一番上の場合は未指定）
+
+        if (!id) {
+            return NextResponse.json({ error: "Missing task ID" }, { status: 400 });
+        }
+
+        const tasksClient = getGoogleTasksClient(token, refreshTokenHeader);
+        const taskLists = await tasksClient.tasklists.list();
+        const defaultList = taskLists.data.items?.[0];
+
+        if (!defaultList?.id) {
+            return NextResponse.json({ error: "Task list not found" }, { status: 404 });
+        }
+
+        const response = await tasksClient.tasks.move({
+            tasklist: defaultList.id,
+            task: id,
+            previous: previous || undefined,
+        });
+
+        return NextResponse.json(response.data, { status: 200 });
+    } catch (error: unknown) {
+        console.error("PUT /api/tasks error:", error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const status = errorMessage.includes("invalid_grant") ? 401 : 500;
+        return NextResponse.json({ error: "Failed to move task", details: errorMessage }, { status });
+    }
+}
