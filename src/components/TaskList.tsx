@@ -15,6 +15,7 @@ import { PLACES, PlaceType } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
 import { Search, ArrowUpDown } from "lucide-react";
+import confetti from "canvas-confetti";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -62,6 +63,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const [taskMetadataMap, setTaskMetadataMap] = useState<Map<string, TaskMetadata>>(new Map());
     const [searchQuery, setSearchQuery] = useState("");
     const [editTaskType, setEditTaskType] = useState<'todo' | 'wish'>('todo');
+    const [editIsFrog, setEditIsFrog] = useState(false);
     const [sortMode, setSortMode] = useState<'importance' | 'urgency' | 'dueDate' | 'createdAt' | 'manual'>('manual');
 
     // 1. Firestoreからデータをリアルタイム購読
@@ -119,6 +121,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 isRoutine: meta?.is_routine || false,
                 routineConfig: meta?.routine_config || { type: 'none' },
                 taskType: meta?.task_type || 'todo',
+                isFrog: meta?.is_frog || false,
                 createdAt: meta?.created_at,
             };
         });
@@ -188,6 +191,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     is_routine: editIsRoutine,
                     routine_config: editRoutineConfig,
                     task_type: editTaskType,
+                    is_frog: editIsFrog,
                     updated_at: new Date().toISOString(),
                     // 新規作成時のみ created_at を設定するための配慮（既存ならそのまま）
                     created_at: editingTask.createdAt || new Date().toISOString()
@@ -252,6 +256,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                             is_routine: task.isRoutine,
                             routine_config: task.routineConfig,
                             task_type: task.taskType,
+                            is_frog: task.isFrog, // カエル設定も引き継ぐ
                             created_at: new Date().toISOString()
                         });
                     }
@@ -280,6 +285,14 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 // エラーの場合は元に戻す(Firestoreの再読込をトリガーするだけでも良いが、今回は簡易的に)
                 alert("タスクの完了処理に失敗しました。");
             } else {
+                // カエルタスク完了時に紙吹雪
+                if (task.isFrog) {
+                    confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                    });
+                }
                 // 完了状態をFirestoreキャッシュにも同期
                 await syncData();
             }
@@ -369,6 +382,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
         setEditTitle(task.title);
         setEditNotes(task.notes || "");
         setEditTaskType(task.taskType || 'todo');
+        setEditIsFrog(task.isFrog || false);
     };
 
     const handleMoveTask = async (taskId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
@@ -479,7 +493,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
             </div>
 
             {placeTasks.map(task => (
-                <div key={task.id} className={`${task.taskType === 'wish' ? 'bg-pink-50/60 border-pink-100' : 'bg-white/80 border-white/50'} backdrop-blur-sm p-4 rounded-xl shadow-sm border flex items-start gap-4 hover:shadow-md transition-shadow group`}>
+                <div key={task.id} className={`${task.taskType === 'wish' ? 'bg-pink-50/60 border-pink-100' : 'bg-white/80 border-white/50'} backdrop-blur-sm p-4 rounded-xl shadow-sm border flex items-start gap-4 hover:shadow-md transition-shadow group ${task.isFrog ? 'ring-2 ring-green-400 ring-offset-2' : ''}`}>
                     <button
                         onClick={(e) => handleCompleteTask(task, e)}
                         className="mt-0.5 w-5 h-5 shrink-0 rounded border border-gray-300 flex items-center justify-center hover:bg-green-50 hover:border-green-400 transition-colors"
@@ -488,6 +502,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     </button>
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEditModal(task)}>
                         <div className="flex items-center gap-2">
+                            {task.isFrog && <span className="text-base leading-none">🐸</span>}
                             {task.taskType === 'wish' && <Sparkles className="w-3 h-3 text-pink-400 shrink-0" />}
                             <h3 className="text-gray-900 font-medium text-sm truncate">{task.title}</h3>
                         </div>
@@ -644,20 +659,36 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                 {/* タスク分類設定 */}
                                 <section>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">タスク分類</label>
-                                    <div className="flex gap-4">
+                                    {/* 種類切り替え（TODO/WISH） */}
+                                    <div className="flex gap-2 p-1 bg-gray-100 rounded-xl mb-4">
                                         <button
+                                            type="button"
                                             onClick={() => setEditTaskType('todo')}
-                                            className={`flex-1 py-4 rounded-2xl border font-bold text-sm transition-all ${editTaskType === 'todo' ? 'bg-gray-900 text-white border-gray-900 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${editTaskType === 'todo' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
-                                            TODO (やるべき)
+                                            TODO
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={() => setEditTaskType('wish')}
-                                            className={`flex-1 py-4 rounded-2xl border font-bold text-sm transition-all ${editTaskType === 'wish' ? 'bg-pink-500 text-white border-pink-500 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100'}`}
+                                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${editTaskType === 'wish' ? 'bg-white text-pink-500 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                         >
-                                            WISH (やりたい)
+                                            WISH
                                         </button>
                                     </div>
+
+                                    {/* カエルボタン */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditIsFrog(!editIsFrog)}
+                                        className={`w-full py-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 font-bold ${editIsFrog
+                                                ? 'bg-green-50 border-green-200 text-green-700 shadow-inner'
+                                                : 'bg-white border-gray-100 text-gray-400 hover:border-green-100 hover:text-green-500'
+                                            }`}
+                                    >
+                                        <span className="text-xl">{editIsFrog ? '🐸' : '🐸'}</span>
+                                        {editIsFrog ? 'カエル（最優先）に設定中' : 'カエルに設定する'}
+                                    </button>
                                 </section>
 
                                 {/* 所属プレイス設定 */}

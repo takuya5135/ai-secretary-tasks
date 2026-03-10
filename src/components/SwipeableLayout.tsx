@@ -41,6 +41,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     const [addDueDate, setAddDueDate] = useState("");
     const [addIsRoutine, setAddIsRoutine] = useState(false);
     const [addRoutineConfig, setAddRoutineConfig] = useState<RoutineConfig>({ type: 'none' });
+    const [addIsFrog, setAddIsFrog] = useState(false);
 
     // AI提案用のState
     const [proposedTasks, setProposedTasks] = useState<AIParsedTask[] | null>(null);
@@ -97,6 +98,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                     urgency: addUrgency,
                     is_routine: addIsRoutine,
                     routine_config: addRoutineConfig,
+                    is_frog: addIsFrog,
                     created_at: new Date().toISOString()
                 });
             }
@@ -180,6 +182,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         place: task.place,
                         importance: task.importance,
                         urgency: task.urgency,
+                        is_frog: (task as any).isFrog || (task as any).is_frog || false,
                         created_at: new Date().toISOString()
                     });
                 }
@@ -470,6 +473,26 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                                     )}
                                                 </div>
                                             )}
+                                        </section>
+
+                                        {/* カエル設定 */}
+                                        <section>
+                                            <div className="flex items-center justify-between p-4 bg-green-50/50 rounded-2xl border border-green-100/50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl">🐸</span>
+                                                    <div>
+                                                        <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest">カエルを食べてしまえ</p>
+                                                        <p className="text-[9px] text-green-600/70 font-medium">最優先かつ気が進まないタスクに設定</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAddIsFrog(!addIsFrog)}
+                                                    className={`w-10 h-5 rounded-full transition-colors relative ${addIsFrog ? "bg-green-500" : "bg-gray-200"}`}
+                                                >
+                                                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${addIsFrog ? "left-5.5" : "left-0.5"}`} />
+                                                </button>
+                                            </div>
                                         </section>
                                     </motion.div>
                                 )}

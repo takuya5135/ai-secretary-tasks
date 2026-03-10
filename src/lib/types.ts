@@ -32,6 +32,7 @@ export interface TaskMetadata {
     is_routine?: boolean;
     routine_config?: RoutineConfig;
     task_type?: 'todo' | 'wish'; // 新設
+    is_frog?: boolean;          // カエルを食べてしまえ機能
     created_at?: string;        // 新設 (ISO 8601)
     aiSuggestionLog?: Record<string, unknown>;
 }
@@ -49,6 +50,7 @@ export interface AppTask {
     isRoutine?: boolean;
     routineConfig?: RoutineConfig;
     taskType: 'todo' | 'wish';  // 新設
+    isFrog?: boolean;           // カエルを食べてしまえ機能
     createdAt?: string;          // 新設
 }
 
