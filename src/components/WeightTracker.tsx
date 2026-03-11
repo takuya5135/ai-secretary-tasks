@@ -295,7 +295,16 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
                                         />
                                         <YAxis
                                             hide
-                                            domain={['dataMin - 1', 'dataMax + 1']}
+                                            domain={[
+                                                (dataMin: number) => {
+                                                    const min = Math.min(dataMin, targetWeight ?? dataMin);
+                                                    return min - (min * 0.05); // 下に5%の余白
+                                                },
+                                                (dataMax: number) => {
+                                                    const max = Math.max(dataMax, targetWeight ?? dataMax);
+                                                    return max + (max * 0.05); // 上に5%の余白
+                                                }
+                                            ]}
                                         />
                                         <Tooltip
                                             contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
