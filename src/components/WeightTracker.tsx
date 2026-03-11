@@ -10,7 +10,9 @@ import {
     Scale,
     History,
     LineChart as ChartIcon,
-    Trash2
+    Trash2,
+    Edit2,
+    Check as CheckIcon
 } from "lucide-react";
 import {
     XAxis,
@@ -19,7 +21,8 @@ import {
     Tooltip,
     ResponsiveContainer,
     AreaChart,
-    Area
+    Area,
+    ReferenceLine
 } from "recharts";
 import {
     collection,
@@ -50,6 +53,11 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState<Period>('1m');
 
+    // 目標体重用
+    const [targetWeight, setTargetWeight] = useState<number | null>(null);
+    const [isEditingTarget, setIsEditingTarget] = useState(false);
+    const [editTargetWeight, setEditTargetWeight] = useState("");
+
     // 入力フォーム用
     const [weight, setWeight] = useState("");
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -75,7 +83,21 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        // 目標体重の購読
+        const unsubscribeSettings = onSnapshot(doc(db, "users", user.uid, "settings", "weight_target"), (docSnap) => {
+            if (docSnap.exists() && docSnap.data().target) {
+                setTargetWeight(docSnap.data().target);
+                setEditTargetWeight(String(docSnap.data().target));
+            } else {
+                setTargetWeight(null);
+                setEditTargetWeight("");
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribeSettings();
+        };
     }, [user]);
 
     // グラフ用データの加工
@@ -138,6 +160,21 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
         }
     };
 
+    const handleSaveTarget = async () => {
+        if (!user || !db) return;
+        try {
+            const val = parseFloat(editTargetWeight);
+            if (isNaN(val)) {
+                await setDoc(doc(db, "users", user.uid, "settings", "weight_target"), { target: null }, { merge: true });
+            } else {
+                await setDoc(doc(db, "users", user.uid, "settings", "weight_target"), { target: val }, { merge: true });
+            }
+            setIsEditingTarget(false);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div
@@ -168,27 +205,46 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center">
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">現在の体重</span>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-3xl font-black text-gray-900">{latestWeight || "--"}</span>
-                                <span className="text-xs text-gray-500 font-bold">kg</span>
+                                <span className="text-2xl font-black text-gray-900">{latestWeight || "--"}</span>
+                                <span className="text-[10px] text-gray-500 font-bold">kg</span>
                             </div>
                         </div>
-                        <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center">
+                        <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">目標体重</span>
+                            {isEditingTarget ? (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                    <input
+                                        type="number" step="0.1" autoFocus
+                                        value={editTargetWeight} onChange={(e) => setEditTargetWeight(e.target.value)}
+                                        className="w-14 text-center border border-pink-200 rounded text-sm font-bold focus:outline-none focus:ring-1 focus:ring-pink-500"
+                                    />
+                                    <button onClick={handleSaveTarget} className="p-1 bg-pink-100 text-pink-600 rounded hover:bg-pink-200 transition-colors"><CheckIcon className="w-3 h-3" /></button>
+                                </div>
+                            ) : (
+                                <div className="flex items-baseline gap-1 group cursor-pointer" onClick={() => setIsEditingTarget(true)}>
+                                    <span className="text-2xl font-black text-pink-500">{targetWeight || "--"}</span>
+                                    <span className="text-[10px] text-pink-400 font-bold">kg</span>
+                                    <Edit2 className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="bg-white p-3 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">前回比</span>
                             <div className="flex items-center gap-1">
                                 {diff ? (
                                     <>
-                                        {diff < 0 ? <TrendingDown className="w-4 h-4 text-green-500" /> : <TrendingUp className="w-4 h-4 text-red-500" />}
-                                        <span className={`text-xl font-bold ${diff < 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {diff < 0 ? <TrendingDown className="w-3 h-3 text-green-500" /> : <TrendingUp className="w-3 h-3 text-red-500" />}
+                                        <span className={`text-lg font-bold ${diff < 0 ? 'text-green-500' : 'text-red-500'}`}>
                                             {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}
                                         </span>
-                                        <span className="text-xs text-gray-500 font-bold">kg</span>
+                                        <span className="text-[10px] text-gray-500 font-bold">kg</span>
                                     </>
                                 ) : (
-                                    <span className="text-xl font-bold text-gray-300">--</span>
+                                    <span className="text-lg font-bold text-gray-300">--</span>
                                 )}
                             </div>
                         </div>
@@ -244,6 +300,9 @@ export default function WeightTracker({ onClose }: { onClose: () => void }) {
                                             contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                             labelStyle={{ fontWeight: 'bold' }}
                                         />
+                                        {targetWeight && (
+                                            <ReferenceLine y={targetWeight} stroke="#f43f5e" strokeDasharray="5 5" strokeWidth={2} />
+                                        )}
                                         <Area
                                             type="monotone"
                                             dataKey="weight"

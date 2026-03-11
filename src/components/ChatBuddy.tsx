@@ -277,17 +277,30 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             const data = await res.json();
             let content = data.content;
 
-            // タスク提案の抽出
-            const taskMatch = content.match(/\[TASK_PROPOSED:\s*(\{.*?\})\]/);
-            if (taskMatch && onTaskProposed) {
+            // タスク提案の抽出 (単一/複数の両対応)
+            const singleTaskMatch = content.match(/\[TASK_PROPOSED:\s*(\{.*?\})\]/s);
+            const multiTasksMatch = content.match(/\[TASKS_PROPOSED:\s*(\[.*?\])\]/s);
+
+            let extractedTasks: any[] = [];
+            if (multiTasksMatch) {
                 try {
-                    const proposedTask = JSON.parse(taskMatch[1]);
-                    onTaskProposed([proposedTask]);
-                    // タスク提案部分をメッセージからは削除（あるいは整形）
-                    content = content.replace(/\[TASK_PROPOSED:.*?\]/, "").trim();
+                    extractedTasks = JSON.parse(multiTasksMatch[1]);
+                    content = content.replace(/\[TASKS_PROPOSED:.*?\]/s, "").trim();
+                } catch (e) {
+                    console.error("Tasks parsing error from chat:", e);
+                }
+            } else if (singleTaskMatch) {
+                try {
+                    const proposedTask = JSON.parse(singleTaskMatch[1]);
+                    extractedTasks = [proposedTask];
+                    content = content.replace(/\[TASK_PROPOSED:.*?\]/s, "").trim();
                 } catch (e) {
                     console.error("Task parsing error from chat:", e);
                 }
+            }
+
+            if (extractedTasks.length > 0 && onTaskProposed) {
+                onTaskProposed(extractedTasks);
             }
 
             setMessages(prev => [...prev, { role: "assistant", content }]);

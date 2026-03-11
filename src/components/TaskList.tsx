@@ -423,7 +423,10 @@ export default function TaskList({ place }: { place: PlaceType }) {
             setEditingTask(null);
 
             // 削除結果をFirestoreキャッシュにも同期
-            await syncData();
+            // Googleからのレスポンス遅延により即時フェッチすると古いデータが返ってくるため待機する
+            setTimeout(() => {
+                syncData();
+            }, 3000);
         } catch (err) {
             console.error(err);
             alert("タスクの削除に失敗しました");
