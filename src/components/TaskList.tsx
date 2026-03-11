@@ -419,13 +419,27 @@ export default function TaskList({ place }: { place: PlaceType }) {
             }
 
             // UIから削除 (オプティミスティックUI)
+            const deletedTask = googleTasks.find(t => t.id === taskId);
             setGoogleTasks(prev => prev.filter(t => t.id !== taskId));
             setEditingTask(null);
 
             // 削除結果をFirestoreキャッシュにも同期
             // Googleからのレスポンス遅延により即時フェッチすると古いデータが返ってくるため待機する
-            setTimeout(() => {
-                syncData();
+            setTimeout(async () => {
+                await syncData();
+                // 同期後に同名のタスクが復活していないかチェック (Google側の繰り返し自動生成対策)
+                if (deletedTask?.title) {
+                    // 最新のFirestoreデータを取得してチェックする (少し時間差があるためさらに1秒後にチェック)
+                    setTimeout(() => {
+                        setGoogleTasks(currentTasks => {
+                            const resurrected = currentTasks.find(t => t.title === deletedTask.title && t.id !== taskId);
+                            if (resurrected) {
+                                alert(`【警告】「${deletedTask.title}」が再生成されました。\nGoogle Keepやカレンダーの繰り返し設定による自動生成の可能性があります。完全に削除するには、大元のGoogleアプリから削除してください。`);
+                            }
+                            return currentTasks;
+                        });
+                    }, 1000);
+                }
             }, 3000);
         } catch (err) {
             console.error(err);
