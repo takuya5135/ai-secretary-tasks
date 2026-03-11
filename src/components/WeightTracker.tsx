@@ -32,6 +32,7 @@ import {
     onSnapshot,
     deleteDoc,
     doc,
+    setDoc,
     Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
