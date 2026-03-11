@@ -278,14 +278,14 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
             let content = data.content;
 
             // タスク提案の抽出 (単一/複数の両対応)
-            const singleTaskMatch = content.match(/\[TASK_PROPOSED:\s*(\{.*?\})\]/s);
-            const multiTasksMatch = content.match(/\[TASKS_PROPOSED:\s*(\[.*?\])\]/s);
+            const singleTaskMatch = content.match(/\[TASK_PROPOSED:\s*(\{[\s\S]*?\})\]/);
+            const multiTasksMatch = content.match(/\[TASKS_PROPOSED:\s*(\[[\s\S]*?\])\]/);
 
             let extractedTasks: any[] = [];
             if (multiTasksMatch) {
                 try {
                     extractedTasks = JSON.parse(multiTasksMatch[1]);
-                    content = content.replace(/\[TASKS_PROPOSED:.*?\]/s, "").trim();
+                    content = content.replace(/\[TASKS_PROPOSED:[\s\S]*?\]/, "").trim();
                 } catch (e) {
                     console.error("Tasks parsing error from chat:", e);
                 }
@@ -293,7 +293,7 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                 try {
                     const proposedTask = JSON.parse(singleTaskMatch[1]);
                     extractedTasks = [proposedTask];
-                    content = content.replace(/\[TASK_PROPOSED:.*?\]/s, "").trim();
+                    content = content.replace(/\[TASK_PROPOSED:[\s\S]*?\]/, "").trim();
                 } catch (e) {
                     console.error("Task parsing error from chat:", e);
                 }

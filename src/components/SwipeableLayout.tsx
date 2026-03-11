@@ -30,7 +30,6 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
     // 音声入力用のState
     const [isListening, setIsListening] = useState(false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognitionRef = React.useRef<any>(null);
 
     // データ同期用フック
@@ -90,14 +89,12 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     // 音声認識 (STT) のセットアップ
     useEffect(() => {
         if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
             recognitionRef.current = new SpeechRecognition();
             recognitionRef.current.lang = "ja-JP";
             recognitionRef.current.continuous = false;
             recognitionRef.current.interimResults = false;
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             recognitionRef.current.onresult = (event: any) => {
                 const transcript = event.results[0][0].transcript;
                 setNewTaskTitle(transcript); // 認識したテキストをセット
@@ -105,7 +102,6 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                 setIsListening(false);
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             recognitionRef.current.onerror = (event: any) => {
                 console.error("Speech recognition error in layout", event.error);
                 setIsListening(false);
