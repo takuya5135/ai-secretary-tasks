@@ -38,6 +38,26 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     // 初回マウント時＋認証情報変更時にバックグラウンドで最新データをFirebaseへ同期
     useEffect(() => {
         syncData();
+
+        // Android 9等のデバッグ用：キャッチされないエラーをログ出力
+        const handleError = (event: ErrorEvent) => {
+            console.error("Global Error Caught:", event.error);
+            // 本番環境でも重要なエラーはアラート出す（任意）
+            if (process.env.NODE_ENV === 'development') {
+                alert("Runtime Error: " + event.message);
+            }
+        };
+        const handleRejection = (event: PromiseRejectionEvent) => {
+            console.error("Unhandled Rejection:", event.reason);
+        };
+
+        window.addEventListener('error', handleError);
+        window.addEventListener('unhandledrejection', handleRejection);
+
+        return () => {
+            window.removeEventListener('error', handleError);
+            window.removeEventListener('unhandledrejection', handleRejection);
+        };
     }, [syncData]);
 
     // 詳細設定用State
@@ -126,9 +146,19 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
     // タスク追加処理
     const handleAddTask = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTaskTitle.trim() || !user || (!googleAccessToken && !googleRefreshToken) || !db) return;
+        console.log("handleAddTask started. Title:", newTaskTitle);
+        if (!newTaskTitle.trim() || !user || (!googleAccessToken && !googleRefreshToken) || !db) {
+            console.warn("handleAddTask validation failed", {
+                hasTitle: !!newTaskTitle.trim(),
+                hasUser: !!user,
+                hasTokens: !!(googleAccessToken || googleRefreshToken),
+                hasDb: !!db
+            });
+            return;
+        }
         setIsSubmitting(true);
         try {
+            console.log("Sending POST /api/tasks...");
             // 1. Google Tasks に追加
             const headers: Record<string, string> = {
                 "Content-Type": "application/json",
@@ -158,11 +188,13 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                     place: activePlaceId,
                     importance: addImportance,
                     urgency: addUrgency,
+                    is_approved: true, // 明示的にセットしておく
                     is_routine: addIsRoutine,
                     routine_config: addRoutineConfig,
                     is_frog: addIsFrog,
                     created_at: new Date().toISOString()
                 });
+                console.log("Firestore metadata saved successfully");
             }
 
 

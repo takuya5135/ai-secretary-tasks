@@ -35,5 +35,10 @@
     "eslint-config-next": "^15.1.0",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "browserslist": [
+    "chrome >= 70",
+    "last 2 versions",
+    "not dead"
+  ]
 }

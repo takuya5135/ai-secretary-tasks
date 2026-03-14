@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* backdrop-filter非対応ブラウザ向けのフォールバック */
+@supports not (backdrop-filter: blur(1px)) {
+  .backdrop-blur-sm, .backdrop-blur-md, .backdrop-blur-xl {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+  }
+}
