@@ -177,31 +177,12 @@ export default function TaskList({ place }: { place: PlaceType }) {
         if (!user || !editingTask || (!googleAccessToken && !googleRefreshToken)) return;
         setIsUpdating(true);
         try {
-            // Google Tasks の基本情報を更新 (タイトル、メモ、期限に変更がある場合)
             const isTitleChanged = editTitle !== editingTask.title;
             const isNotesChanged = editNotes !== (editingTask.notes || "");
             const isDueChanged = editDueDate !== (editingTask.dueDate ? editingTask.dueDate.split('T')[0] : "");
 
-            if (isTitleChanged || isNotesChanged || isDueChanged) {
-                const headers: Record<string, string> = {
-                    "Content-Type": "application/json",
-                };
-                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
-
-                await fetch("/api/tasks", {
-                    method: "PATCH",
-                    headers,
-                    body: JSON.stringify({
-                        id: editingTask.id,
-                        title: editTitle,
-                        notes: editNotes,
-                        due: editDueDate ? new Date(editDueDate).toISOString() : null
-                    })
-                });
-            }
+            // 1. Firestore を即座に更新 (メタデータ)
             if (db) {
-                // place も含めて更新する
                 await setDoc(doc(db, "users", user.uid, "tasks_metadata", editingTask.id), {
                     google_task_id: editingTask.id,
                     place: editPlace,
@@ -213,22 +194,44 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     is_frog: editIsFrog,
                     shopping_location: editShoppingLocation,
                     updated_at: new Date().toISOString(),
-                    // 新規作成時のみ created_at を設定するための配慮（既存ならそのまま）
                     created_at: editingTask.createdAt || new Date().toISOString()
                 }, { merge: true });
+
+                // Google Cache も更新（タイトルやメモが変わった場合）
+                if (isTitleChanged || isNotesChanged || isDueChanged) {
+                    const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
+                    const updatedItems = googleTasks.map(t => 
+                        t.id === editingTask.id 
+                        ? { ...t, title: editTitle, notes: editNotes, due: editDueDate ? new Date(editDueDate).toISOString() : null } 
+                        : t
+                    );
+                    await setDoc(tasksRef, { items: updatedItems, updatedAt: new Date().toISOString() }, { merge: true });
+                }
             }
 
-            // 変更先のプレイスが現在開いているプレイスと異なる場合は、リストから外れるため再取得(またはState更新)することで即座に消える
-            // (FirestoreのonSnapshotにより自動でUIは更新されるため、ローカルステートの手動更新は不要です)
-
-            // モーダルを閉じる
+            // 2. モーダルを即座に閉じる
             setEditingTask(null);
 
-            // Googleに反映した変更をFirestoreキャッシュにも同期
-            await syncData();
+            // 3. Google API をバックグラウンドで更新 (オンライン時のみ)
+            if (navigator.onLine && (isTitleChanged || isNotesChanged || isDueChanged)) {
+                const headers: Record<string, string> = { "Content-Type": "application/json" };
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+
+                fetch("/api/tasks", {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({
+                        id: editingTask.id,
+                        title: editTitle,
+                        notes: editNotes,
+                        due: editDueDate ? new Date(editDueDate).toISOString() : null
+                    })
+                }).then(() => syncData());
+            }
         } catch (err) {
             console.error(err);
-            alert("タスクの更新に失敗しました");
+            if (navigator.onLine) alert("タスクの更新に失敗しました");
         } finally {
             setIsUpdating(false);
         }
@@ -276,91 +279,89 @@ export default function TaskList({ place }: { place: PlaceType }) {
     };
 
     const handleCompleteTask = async (task: AppTask, e: React.MouseEvent) => {
-        e.stopPropagation(); // モーダルが開くのを防ぐ
+        e.stopPropagation();
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
-        // UI側ですぐに消えるが、念のためオプティミスティック更新としてStateからも弾く
+        // 1. オプティミスティックUI更新 (State)
         setGoogleTasks(prev => prev.filter(t => t.id !== task.id));
 
         try {
-            // ルーティンタスクの場合は、次回の期日を計算して新規タスクとして再作成（クローン）する
+            // 2. Firestoreのキャッシュも即座に更新 (これによってオフラインでもリロードに耐えられる)
+            if (db) {
+                const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
+                const updatedItems = googleTasks.filter(t => t.id !== task.id);
+                await setDoc(tasksRef, {
+                    items: updatedItems,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+            }
+
+            // ルーティンタスクの次回復帰処理
             if (task.isRoutine && task.routineConfig && task.routineConfig.type !== 'none') {
                 const nextDate = calculateNextRoutineDate(task.dueDate, task.routineConfig);
+                
+                // 次のタスク作成も、本来はオフライン対応すべきだが、
+                // 一旦はオンライン時のみAPIを叩き、成功したらメタデータを追加する
+                if (navigator.onLine) {
+                  const headers: Record<string, string> = { "Content-Type": "application/json" };
+                  if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                  if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
-                const headers: Record<string, string> = {
-                    "Content-Type": "application/json",
-                };
+                  const createRes = await fetch("/api/tasks", {
+                      method: "POST",
+                      headers,
+                      body: JSON.stringify({
+                          title: task.title,
+                          notes: task.notes,
+                          dueDate: nextDate ? nextDate.toISOString() : null
+                      })
+                  });
+
+                  if (createRes.ok && db) {
+                      const newTaskData = await createRes.json();
+                      await setDoc(doc(db, "users", user.uid, "tasks_metadata", newTaskData.id), {
+                          google_task_id: newTaskData.id,
+                          place: task.place,
+                          importance: task.importance,
+                          urgency: task.urgency,
+                          is_routine: task.isRoutine,
+                          routine_config: task.routineConfig,
+                          task_type: task.taskType,
+                          is_frog: task.isFrog,
+                          shopping_location: task.shoppingLocation || "未分類",
+                          created_at: new Date().toISOString()
+                      });
+                  }
+                }
+            }
+
+            // 3. Google Tasks API をバックグラウンドで叩く
+            if (navigator.onLine) {
+                const headers: Record<string, string> = { "Content-Type": "application/json" };
                 if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
                 if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
-                // 次のタスクをPOSTで作成
-                const createRes = await fetch("/api/tasks", {
-                    method: "POST",
+                await fetch('/api/tasks', {
+                    method: 'PATCH',
                     headers,
-                    body: JSON.stringify({
-                        title: task.title,
-                        notes: task.notes,
-                        dueDate: nextDate ? nextDate.toISOString() : null
-                    })
+                    body: JSON.stringify({ id: task.id, status: 'completed' })
                 });
-
-                if (createRes.ok) {
-                    const newTaskData = await createRes.json();
-
-                    // 新しいタスクのメタデータをFirestoreに保存
-                    if (db) {
-                        await setDoc(doc(db, "users", user.uid, "tasks_metadata", newTaskData.id), {
-                            google_task_id: newTaskData.id,
-                            place: task.place, // 元のプレイスを引き継ぐ
-                            importance: task.importance,     // 重要度を引き継ぐ
-                            urgency: task.urgency,           // 緊急度を引き継ぐ
-                            is_routine: task.isRoutine,
-                            routine_config: task.routineConfig,
-                            task_type: task.taskType,
-                            is_frog: task.isFrog, // カエル設定も引き継ぐ
-                            shopping_location: task.shoppingLocation || "未分類",
-                            created_at: new Date().toISOString()
-                        });
-                    }
-                } else {
-                    console.error("Failed to create next routine task");
-                }
             }
 
-            const headers: Record<string, string> = {
-                "Content-Type": "application/json",
-            };
-            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
-
-            // Google Tasks APIで完了状態へ
-            const res = await fetch('/api/tasks', {
-                method: 'PATCH',
-                headers,
-                body: JSON.stringify({
-                    id: task.id,
-                    status: 'completed'
-                })
-            });
-
-            if (!res.ok) {
-                // エラーの場合は元に戻す(Firestoreの再読込をトリガーするだけでも良いが、今回は簡易的に)
-                alert("タスクの完了処理に失敗しました。");
-            } else {
-                // カエルタスク完了時に紙吹雪
-                if (task.isFrog) {
-                    confetti({
-                        particleCount: 100,
-                        spread: 70,
-                        origin: { y: 0.6 }
-                    });
-                }
-                // 完了状態をFirestoreキャッシュにも同期
-                await syncData();
+            // カエルタスク完了時に紙吹雪
+            if (task.isFrog) {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
             }
+            
+            // 同期はバックグラウンドで行う（エラーになってもUIは戻さない）
+            if (navigator.onLine) syncData();
+
         } catch (error) {
-            console.error(error);
-            alert("タスクの完了処理に失敗しました。");
+            console.error("Task completion error:", error);
+            // オフラインエラーなどの場合はアラートを出さず、静かに処理を続ける
+            if (navigator.onLine) {
+                alert("タスクの完了処理中にエラーが発生しました。");
+            }
         }
     };
 
@@ -368,84 +369,73 @@ export default function TaskList({ place }: { place: PlaceType }) {
         e.stopPropagation();
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
+        // 1. オプティミスティックUI更新
         setGoogleTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'needsAction' } : t));
 
         try {
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
-            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
+            // 2. Firestoreのキャッシュも更新
+            if (db) {
+                const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
+                const updatedItems = googleTasks.map(t => t.id === task.id ? { ...t, status: 'needsAction' } : t);
+                await setDoc(tasksRef, { items: updatedItems, updatedAt: new Date().toISOString() }, { merge: true });
+            }
 
-            const res = await fetch('/api/tasks', {
-                method: 'PATCH',
-                headers,
-                body: JSON.stringify({
-                    id: task.id,
-                    status: 'needsAction',
-                    // Google Tasks APIでは、statusをneedsActionに戻す時はcompletedをnullにする必要があります（通常はAPI側で処理されますが念のため）
-                    completed: null
-                })
-            });
+            // 3. API 呼び出し (オンライン時のみ)
+            if (navigator.onLine) {
+                const headers: Record<string, string> = { "Content-Type": "application/json" };
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
-            if (!res.ok) {
-                alert("タスクの復元に失敗しました。");
-            } else {
-                await syncData();
+                fetch('/api/tasks', {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        id: task.id,
+                        status: 'needsAction',
+                        completed: null
+                    })
+                }).then(() => syncData());
             }
         } catch (error) {
             console.error(error);
-            alert("タスクの復元に失敗しました。");
+            if (navigator.onLine) alert("タスクの復元に失敗しました。");
         }
     };
 
     const handleDeleteTask = async (taskId: string) => {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
-        setIsUpdating(true);
+        // 1. オプティミスティックUI更新
+        const deletedTask = googleTasks.find(t => t.id === taskId);
+        setGoogleTasks(prev => prev.filter(t => t.id !== taskId));
+        setEditingTask(null);
+
         try {
-            const headers: Record<string, string> = {};
-            if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
-            if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
-
-            const res = await fetch(`/api/tasks?id=${taskId}`, {
-                method: 'DELETE',
-                headers
-            });
-
-            if (!res.ok) throw new Error("Failed to delete task");
-
-            // Firestore のメタデータも削除
+            // 2. Firestore を反映
             if (db) {
-                await deleteDoc(doc(db, "users", user.uid, "tasks_metadata", taskId));
+                // キャッシュ更新
+                const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
+                const updatedItems = googleTasks.filter(t => t.id !== taskId);
+                await setDoc(tasksRef, { items: updatedItems, updatedAt: new Date().toISOString() }, { merge: true });
+                
+                // メタデータ削除 (これはバックグラウンドで良い)
+                deleteDoc(doc(db, "users", user.uid, "tasks_metadata", taskId));
             }
 
-            // UIから削除 (オプティミスティックUI)
-            const deletedTask = googleTasks.find(t => t.id === taskId);
-            setGoogleTasks(prev => prev.filter(t => t.id !== taskId));
-            setEditingTask(null);
+            // 3. API 呼び出し (オンライン時のみ)
+            if (navigator.onLine) {
+                const headers: Record<string, string> = {};
+                if (googleAccessToken) headers["Authorization"] = `Bearer ${googleAccessToken}`;
+                if (googleRefreshToken) headers["x-google-refresh-token"] = googleRefreshToken;
 
-            // 削除結果をFirestoreキャッシュにも同期
-            // Googleからのレスポンス遅延により即時フェッチすると古いデータが返ってくるため待機する
-            setTimeout(async () => {
-                await syncData();
-                // 同期後に同名のタスクが復活していないかチェック (Google側の繰り返し自動生成対策)
-                if (deletedTask?.title) {
-                    // 最新のFirestoreデータを取得してチェックする (少し時間差があるためさらに1秒後にチェック)
-                    setTimeout(() => {
-                        setGoogleTasks(currentTasks => {
-                            const resurrected = currentTasks.find(t => t.title === deletedTask.title && t.id !== taskId);
-                            if (resurrected) {
-                                alert(`【警告】「${deletedTask.title}」が再生成されました。\nGoogle Keepやカレンダーの繰り返し設定による自動生成の可能性があります。完全に削除するには、大元のGoogleアプリから削除してください。`);
-                            }
-                            return currentTasks;
-                        });
-                    }, 1000);
-                }
-            }, 3000);
+                fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE', headers })
+                .then(() => {
+                    setTimeout(() => syncData(), 3000);
+                });
+            }
         } catch (err) {
             console.error(err);
-            alert("タスクの削除に失敗しました");
-        } finally {
-            setIsUpdating(false);
+            if (navigator.onLine) alert("タスクの削除に失敗しました");
         }
     };
 

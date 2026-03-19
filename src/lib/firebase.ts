@@ -22,4 +22,16 @@ const app = isConfigValid
 const auth = (isConfigValid && app) ? getAuth(app) : null;
 const db = (isConfigValid && app) ? getFirestore(app) : null;
 
+// クライアントサイドでのみオフライン持続性を有効化
+if (typeof window !== "undefined" && db) {
+  const { enableMultiTabIndexedDbPersistence } = require("firebase/firestore");
+  enableMultiTabIndexedDbPersistence(db).catch((err: any) => {
+    if (err.code === 'failed-precondition') {
+      console.warn("Firestore persistence failed: multiple tabs open");
+    } else if (err.code === 'unimplemented') {
+      console.warn("Firestore persistence failed: browser not supported");
+    }
+  });
+}
+
 export { app, auth, db };

@@ -13,6 +13,12 @@ export function useSync() {
             return;
         }
 
+        // オフライン時は同期をスキップ
+        if (typeof window !== "undefined" && !navigator.onLine) {
+            console.log("Offline: Skipping Google API sync");
+            return;
+        }
+
         setIsSyncing(true);
         setSyncError(null);
 
