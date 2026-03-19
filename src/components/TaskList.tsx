@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppTask, GoogleTask, TaskMetadata, RoutineConfig } from "@/lib/types";
 import {
-    Check, Clock, AlertTriangle, Calendar as CalendarIcon,
+    Check, Clock, AlertTriangle, AlertCircle, Calendar as CalendarIcon,
     Loader2, RotateCw, X, Trash2, Sparkles,
     ChevronUp, ChevronDown, ChevronsUp, ChevronsDown,
     Search, ArrowUpDown
@@ -88,8 +88,11 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 setGoogleTasks([]);
             }
         }, (err) => {
-            console.error(err);
-            setError("タスク一覧の同期に失敗しました");
+            console.error("Firestore onSnapshot tasks error:", err);
+            // オフライン時はエラー表示を抑制（キャッシュがあればそれが表示される）
+            if (navigator.onLine) {
+                setError("タスク一覧の同期に失敗しました");
+            }
         });
 
         // タスクメタデータを購読
@@ -615,7 +618,9 @@ export default function TaskList({ place }: { place: PlaceType }) {
     const completedTasks = tasks.filter(t => t.status === "completed");
 
     if (loading) return <div className="flex justify-center items-center py-10"><Loader2 className="animate-spin h-8 w-8 text-gray-400" /></div>;
-    if (error) return (
+    
+    // エラーがあっても、タスクが存在する場合はリストを表示し、上部にエラーを出す方針
+    if (error && tasks.length === 0) return (
         <div className="p-6 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100 flex flex-col items-center">
             <AlertTriangle className="mx-auto mb-2 w-8 h-8" />
             <p className="font-bold text-sm mb-4">{error}</p>
@@ -632,6 +637,23 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
     return (
         <div className="space-y-3 pb-24">
+            {/* オフライン・エラー通知バナー (リストが表示されている場合) */}
+            {typeof window !== "undefined" && !navigator.onLine && (
+                <div className="flex items-center gap-2 p-3 mb-4 bg-amber-50 text-amber-700 rounded-xl border border-amber-100 text-xs font-medium shadow-sm animate-pulse">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>オフラインモードで動作中です。一部の機能が制限される場合があります。</span>
+                </div>
+            )}
+            {error && tasks.length > 0 && (
+                <div className="flex items-center justify-between p-3 mb-4 bg-red-50 text-red-700 rounded-xl border border-red-100 text-xs font-medium shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>{error}</span>
+                    </div>
+                    <button onClick={() => setError(null)} className="p-1 hover:bg-red-100 rounded-full transition-colors"><X className="w-3 h-3" /></button>
+                </div>
+            )}
+
             {/* 検索バー */}
             <div className="relative mb-6">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

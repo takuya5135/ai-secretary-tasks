@@ -398,7 +398,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
 
             {/* 同期エラーの表示 (特に認証エラー関連) */}
             <AnimatePresence>
-                {syncError && (
+                {syncError && typeof window !== "undefined" && navigator.onLine && (
                     <motion.div
                         initial={{ opacity: 0, height: 0, scale: 0.9 }}
                         animate={{ opacity: 1, height: 'auto', scale: 1 }}
@@ -408,15 +408,17 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         <div className="p-4 text-center text-red-500 bg-red-50/90 backdrop-blur-sm rounded-2xl border border-red-100 flex flex-col items-center shadow-sm relative overflow-hidden">
                             <div className="flex items-center gap-2 mb-3 z-10">
                                 <AlertCircle className="w-5 h-5 shrink-0" />
-                                <p className="font-bold text-xs">Googleアカウントの認証期限が切れています</p>
+                                <p className="font-bold text-xs">{syncError.includes("Failed to fetch") ? "データの同期に失敗しました。接続を確認してください。" : syncError.includes("auth") || syncError.includes("401") ? "Googleアカウントの認証期限が切れています" : syncError}</p>
                             </div>
-                            <button
-                                onClick={() => connectGoogleTasks()}
-                                className="z-10 px-5 py-2.5 text-xs bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
-                            >
-                                <RotateCw className="w-4 h-4" />
-                                Googleに再接続する
-                            </button>
+                            {(syncError.includes("auth") || syncError.includes("401") || syncError.includes("token")) && (
+                                <button
+                                    onClick={() => connectGoogleTasks()}
+                                    className="z-10 px-5 py-2.5 text-xs bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                                >
+                                    <RotateCw className="w-4 h-4" />
+                                    Googleに再接続する
+                                </button>
+                            )}
                         </div>
                     </motion.div>
                 )}
