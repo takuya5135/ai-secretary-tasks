@@ -406,7 +406,6 @@ export default function TaskList({ place }: { place: PlaceType }) {
         if (!user || (!googleAccessToken && !googleRefreshToken)) return;
 
         // 1. オプティミスティックUI更新
-        const deletedTask = googleTasks.find(t => t.id === taskId);
         setGoogleTasks(prev => prev.filter(t => t.id !== taskId));
         setEditingTask(null);
 
