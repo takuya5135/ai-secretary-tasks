@@ -41,6 +41,35 @@ export function calculateNextRoutineDate(currentDueISO: string | undefined, conf
                 nextDate.setDate(Math.min(config.dayOfMonth, new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()));
             }
             break;
+        case 'monthly_week_day':
+            if (config.weekNumber && config.days && config.days.length > 0) {
+                const targetDayOfWeek = config.days[0];
+                const targetWeekNumber = config.weekNumber;
+
+                // 次の月に移動してから計算
+                nextDate.setMonth(nextDate.getMonth() + 1);
+                nextDate.setDate(1); // 月の初めにリセット
+
+                const firstDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth(), 1);
+                const firstDayOfWeek = firstDayOfMonth.getDay();
+                
+                let day = 1 + (targetDayOfWeek - firstDayOfWeek + 7) % 7;
+                day += (targetWeekNumber - 1) * 7;
+                
+                // 計算結果がその月を超えていないかチェック
+                const lastDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+                if (day > lastDayOfMonth) {
+                    // その月の最終の指定曜日をセット
+                    let lastDay = lastDayOfMonth;
+                    while (new Date(nextDate.getFullYear(), nextDate.getMonth(), lastDay).getDay() !== targetDayOfWeek) {
+                        lastDay--;
+                    }
+                    nextDate.setDate(lastDay);
+                } else {
+                    nextDate.setDate(day);
+                }
+            }
+            break;
         case 'yearly':
         case 'yearly_date':
             nextDate.setFullYear(nextDate.getFullYear() + 1);

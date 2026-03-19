@@ -1009,6 +1009,38 @@ export default function TaskList({ place }: { place: PlaceType }) {
                                                 </div>
                                             )}
 
+                                            {editRoutineConfig.type === 'monthly_week_day' && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs text-gray-500 shrink-0">毎月 第</span>
+                                                        <select
+                                                            value={editRoutineConfig.weekNumber || 1}
+                                                            onChange={(e) => setEditRoutineConfig({ ...editRoutineConfig, weekNumber: parseInt(e.target.value) })}
+                                                            className="w-20 bg-white border border-gray-200 rounded-lg py-2 px-3 text-sm"
+                                                        >
+                                                            {[1, 2, 3, 4, 5].map(n => (
+                                                                <option key={n} value={n}>{n}</option>
+                                                            ))}
+                                                        </select>
+                                                        <span className="text-xs text-gray-500">週の</span>
+                                                    </div>
+                                                    <div className="flex justify-between gap-1">
+                                                        {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+                                                            <button
+                                                                key={i}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditRoutineConfig({ ...editRoutineConfig, days: [i] });
+                                                                }}
+                                                                className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all ${editRoutineConfig.days?.includes(i) ? "bg-green-600 text-white shadow-sm" : "bg-white text-gray-400 border border-gray-200"}`}
+                                                            >
+                                                                {d}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {(editRoutineConfig.type === 'yearly' || editRoutineConfig.type === 'yearly_date') && (
                                                 <div className="flex gap-2">
                                                     <select

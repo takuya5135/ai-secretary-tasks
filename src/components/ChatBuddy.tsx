@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2, ListChecks, Heart, LayoutDashboard } from "lucide-react";
+import { Send, Sparkles, User, Bot, Loader2, ChevronUp, ChevronDown, Mic, MicOff, Volume2, VolumeX, Trash2, ListChecks, Heart, LayoutDashboard, CalendarDays } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { SHOPPING_LOCATIONS } from "@/lib/constants";
@@ -191,12 +191,15 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
         }
     }, [messages, hasSummarized]);
 
-    const handleQuickAction = async (action: 'summarize' | 'organize' | 'encourage') => {
+    const handleQuickAction = async (action: 'summarize' | 'summarize10' | 'organize' | 'encourage') => {
         setIsExpanded(true);
         let prompt = "";
         switch (action) {
             case 'summarize':
                 prompt = "今日の予定とタスクを簡潔に要約して教えて。";
+                break;
+            case 'summarize10':
+                prompt = "今日から10日間の予定とタスクを整理して教えてください。";
                 break;
             case 'organize':
                 prompt = "今のタスクリストを見て、アイゼンハワーマトリクスや2分ルール、カエルを食べるなどの観点から、効率的な進め方をアドバイスして。大きすぎるタスクがあれば分割案も出して。";
@@ -345,6 +348,13 @@ export default function ChatBuddy({ onTaskProposed }: { onTaskProposed?: (tasks:
                 >
                     <LayoutDashboard className="w-3.5 h-3.5" />
                     今日の要約
+                </button>
+                <button
+                    onClick={() => handleQuickAction('summarize10')}
+                    className="flex items-center gap-2 bg-purple-50 text-purple-700 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap hover:bg-purple-100 transition-colors border border-purple-100 shadow-sm"
+                >
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    10日間の要約
                 </button>
                 <button
                     onClick={() => handleQuickAction('organize')}
