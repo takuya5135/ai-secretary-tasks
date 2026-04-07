@@ -524,6 +524,11 @@ export default function TaskList({ place }: { place: PlaceType }) {
 
             if (!res.ok) throw new Error("Failed to move task");
 
+            // 並べ替えが成功したら、タイムスタンプを保存 (同期ロック用)
+            if (typeof window !== "undefined") {
+                localStorage.setItem("last_manual_move_at", Date.now().toString());
+            }
+
             // イベントの反映(Eventual Consistency)待ちで syncData を呼ぶと古い順序に戻るため、
             // ここでは syncData() は呼ばず、ローカルキャッシュの順序をそのまま活かす
         } catch (err) {

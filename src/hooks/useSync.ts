@@ -47,10 +47,26 @@ export function useSync() {
             // 2. Firestore にキャッシュ（上書き保存）
             // Google Tasks
             const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
-            await setDoc(tasksRef, {
-                items: tasksData.tasks || [],
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
+            let shouldSkipTaskCache = false;
+
+            if (typeof window !== "undefined") {
+                const lastMove = localStorage.getItem("last_manual_move_at");
+                if (lastMove) {
+                    const elapsed = Date.now() - parseInt(lastMove);
+                    if (elapsed < 15000) { // 15秒間はガード
+                        shouldSkipTaskCache = true;
+                        console.log(`Sync: Manual move detected recently (${elapsed}ms ago). Skipping Task cache update to prevent order revert.`);
+                    }
+                }
+            }
+
+            if (!shouldSkipTaskCache) {
+                await setDoc(tasksRef, {
+                    items: tasksData.tasks || [],
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                console.log("Sync complete: Google Tasks -> Firestore");
+            }
 
             // Google Calendar
             const calendarRef = doc(db, "users", user.uid, "google_cache", "calendar");
