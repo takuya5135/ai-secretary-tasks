@@ -61,13 +61,18 @@ export function calculateNextRoutineDate(currentDueISO: string | undefined, conf
                 if (day > lastDayOfMonth) {
                     // その月の最終の指定曜日をセット
                     let lastDay = lastDayOfMonth;
-                    while (new Date(nextDate.getFullYear(), nextDate.getMonth(), lastDay).getDay() !== targetDayOfWeek) {
+                    while (lastDay > 0) {
+                        const checkDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), lastDay);
+                        if (checkDate.getDay() === targetDayOfWeek) break;
                         lastDay--;
                     }
-                    nextDate.setDate(lastDay);
+                    nextDate.setDate(lastDay > 0 ? lastDay : 1);
                 } else {
                     nextDate.setDate(day);
                 }
+            } else if (config.weekNumber) {
+                // 曜日が未指定の場合は、現在の曜日を維持
+                nextDate.setMonth(nextDate.getMonth() + 1);
             }
             break;
         case 'yearly':

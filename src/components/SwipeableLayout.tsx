@@ -282,6 +282,8 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                         place: task.place,
                         importance: task.importance,
                         urgency: task.urgency,
+                        is_routine: task.isRoutine || false,
+                        routine_config: task.routineConfig || { type: 'none' },
                         is_frog: task.isFrog || false,
                         shopping_location: task.shoppingLocation || null,
                         created_at: new Date().toISOString()
@@ -565,6 +567,7 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                                         <option value="daily">毎日</option>
                                                         <option value="weekly">毎週 (曜日指定)</option>
                                                         <option value="monthly_day">毎月 (日指定)</option>
+                                                        <option value="monthly_week_day">毎月 (第○×曜日)</option>
                                                         <option value="yearly">毎年 (月日指定)</option>
                                                     </select>
                                                     {addRoutineConfig.type === 'weekly' && (
@@ -572,6 +575,37 @@ export default function SwipeableLayout({ onEditProfile }: { onEditProfile?: () 
                                                             {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
                                                                 <button key={i} type="button" onClick={() => { const days = addRoutineConfig.days || []; setAddRoutineConfig({ ...addRoutineConfig, days: days.includes(i) ? days.filter(x => x !== i) : [...days, i] }); }} className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all ${addRoutineConfig.days?.includes(i) ? "bg-green-600 text-white" : "bg-white text-gray-400 border border-gray-100"}`}>{d}</button>
                                                             ))}
+                                                        </div>
+                                                    )}
+                                                    {addRoutineConfig.type === 'monthly_week_day' && (
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs text-gray-500 shrink-0">毎月 第</span>
+                                                                <select
+                                                                    value={addRoutineConfig.weekNumber || 1}
+                                                                    onChange={(e) => setAddRoutineConfig({ ...addRoutineConfig, weekNumber: parseInt(e.target.value) })}
+                                                                    className="w-20 bg-white border border-gray-100 rounded-xl py-2 px-3 text-sm focus:ring-2 focus:ring-green-500/20 outline-none"
+                                                                >
+                                                                    {[1, 2, 3, 4, 5].map(n => (
+                                                                        <option key={n} value={n}>{n}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <span className="text-xs text-gray-500">週の</span>
+                                                            </div>
+                                                            <div className="flex justify-between gap-1">
+                                                                {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+                                                                    <button
+                                                                        key={i}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setAddRoutineConfig({ ...addRoutineConfig, days: [i] });
+                                                                        }}
+                                                                        className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all ${addRoutineConfig.days?.includes(i) ? "bg-green-600 text-white shadow-sm" : "bg-white text-gray-400 border border-gray-100"}`}
+                                                                    >
+                                                                        {d}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>

@@ -41,7 +41,12 @@ export async function POST(request: Request) {
    - タスク分割: 大きすぎるタスク（Big Frog）を、具体的な小さなステップに分ける提案。
 6. タスクには「TODO（やるべき）」と「WISH（やりたい）」があります。WISHは無理強いせず、心のゆとりとして扱ってください。
 7. 作成日から時間が経過しているタスクがあれば、必要性を優しく確認してください。
-8. もしタスクを提案・抽出した場合は、文末に [TASKS_PROPOSED: [{"title": "...", "importance": 2, "urgency": 2, "place": "2nd", "task_type": "todo", "shoppingLocation": "未分類"}]] のようなJSON配列形式でヒントを含めてください。複数ある場合も配列に入れてください。買い物の場合は、ユーザーの買い物場所設定を考慮して適切なshoppingLocationを含め、titleには場所や「買う」などの動詞を含めず純粋な品物名のみにすること。
+8. もしタスクを提案・抽出した場合は、文末に [TASKS_PROPOSED: [{"title": "...", "importance": 2, "urgency": 2, "place": "2nd", "task_type": "todo", "is_routine": true, "routine_config": {"type": "monthly_week_day", "weekNumber": 2, "days": [2]}, "shoppingLocation": "未分類"}]] のようなJSON配列形式でヒントを含めてください。
+   - 繰り返しの種類（type）: "daily", "weekly", "monthly_day", "monthly_week_day", "yearly"
+   - "weekly" の場合、days: [0-6] (0が日曜日)
+   - "monthly_week_day" の場合、weekNumber: 1-5, days: [0-6] (1つの曜日のみ)
+   - "monthly_day" の場合、dayOfMonth: 1-31
+   - 買い物の場合は、ユーザーの買い物場所設定を考慮して適切なshoppingLocationを含め、titleには場所や「買う」などの動詞を含めず純粋な品物名のみにすること。
 `,
         });
 
