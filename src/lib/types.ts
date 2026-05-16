@@ -35,6 +35,7 @@ export interface TaskMetadata {
     created_at?: string;        // 新設 (ISO 8601)
     aiSuggestionLog?: Record<string, unknown>;
     shopping_location?: string; // 買い物の場所（100均、スーパー、ドラッグストアなど）
+    order_string?: string;      // 順序維持用のFractional Indexing文字列
 }
 
 export interface AppTask {
@@ -52,6 +53,7 @@ export interface AppTask {
     isFrog?: boolean;           // カエルを食べてしまえ機能
     createdAt?: string;          // 新設
     shoppingLocation?: string;   // 買い物の場所
+    orderString?: string;        // フロントエンド用キャメルケース
 }
 
 // AI秘書が参考にするためのユーザープロフィール情報

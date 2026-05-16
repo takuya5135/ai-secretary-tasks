@@ -14,6 +14,7 @@ import { PLACES, PlaceType, SHOPPING_LOCATIONS } from "@/lib/constants";
 import { calculateNextRoutineDate, getDaysSince } from "@/lib/dateUtils";
 import { useSync } from "@/hooks/useSync";
 import confetti from "canvas-confetti";
+import { generateOrderString } from "@/lib/utils/indexing";
 
 // 重要度のラベルと色を返すヘルパー関数
 const getImportanceStyles = (p: number) => {
@@ -142,6 +143,7 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 isFrog: meta?.is_frog || false,
                 createdAt: meta?.created_at,
                 shoppingLocation: meta?.shopping_location || "未分類",
+                orderString: meta?.order_string,
             };
         });
 
@@ -170,8 +172,16 @@ export default function TaskList({ place }: { place: PlaceType }) {
                 if (!b.createdAt) return -1;
                 return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
             });
+        } else if (sortMode === 'manual') {
+            // order_string による辞書順ソート
+            // order_string が無いものは末尾に送る
+            sorted.sort((a, b) => {
+                if (!a.orderString && !b.orderString) return 0;
+                if (!a.orderString) return 1;
+                if (!b.orderString) return -1;
+                return a.orderString.localeCompare(b.orderString);
+            });
         }
-        // sortMode === 'manual' の場合は、map時の順序（Google API由来）をそのまま維持する
 
         setTasks(sorted);
     }, [googleTasks, taskMetadataMap, place, searchQuery, sortMode]);
@@ -464,55 +474,57 @@ export default function TaskList({ place }: { place: PlaceType }) {
     }, [tasks]);
 
     const handleMoveTask = async (taskId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
-        if (!user || (!googleAccessToken && !googleRefreshToken)) return;
+        if (!user || !db || (!googleAccessToken && !googleRefreshToken)) return;
 
         const currentIndex = placeTasks.findIndex(t => t.id === taskId);
         if (currentIndex === -1) return;
 
+        let prevTask: AppTask | null = null;
+        let nextTask: AppTask | null = null;
         let targetPreviousId: string | null = null;
 
-        // 移動先の「直前のタスク」を探す
+        // 新しい位置の直上(prev)と直下(next)のタスクを特定
         if (direction === 'top') {
+            prevTask = null;
+            nextTask = placeTasks.length > 0 && placeTasks[0].id !== taskId ? placeTasks[0] : null;
             targetPreviousId = null;
         } else if (direction === 'bottom') {
-            targetPreviousId = placeTasks[placeTasks.length - 1].id;
+            prevTask = placeTasks.length > 0 && placeTasks[placeTasks.length - 1].id !== taskId ? placeTasks[placeTasks.length - 1] : null;
+            nextTask = null;
+            targetPreviousId = prevTask?.id || null;
         } else if (direction === 'up') {
             if (currentIndex === 0) return;
-            // ターゲットの一つ上のタスクの「さらに上」を previous に指定すると、ターゲットの上に移動する
-            targetPreviousId = currentIndex === 1 ? null : placeTasks[currentIndex - 2].id;
+            prevTask = currentIndex >= 2 ? placeTasks[currentIndex - 2] : null;
+            nextTask = placeTasks[currentIndex - 1];
+            targetPreviousId = prevTask?.id || null;
         } else if (direction === 'down') {
             if (currentIndex === placeTasks.length - 1) return;
-            // ターゲットの一つ下のタスクを previous に指定すると、その下（ターゲットの下）に移動する
-            targetPreviousId = placeTasks[currentIndex + 1].id;
+            prevTask = placeTasks[currentIndex + 1];
+            nextTask = currentIndex + 2 < placeTasks.length ? placeTasks[currentIndex + 2] : null;
+            targetPreviousId = prevTask?.id || null;
         }
 
-        // オプティミスティック更新として Firestoreキャッシュの並び順を直接変更する
-        const originalGoogleTasks = [...googleTasks];
-        const gMovedIndex = originalGoogleTasks.findIndex(t => t.id === taskId);
+        const prevOrder = prevTask?.orderString || null;
+        const nextOrder = nextTask?.orderString || null;
+        const newOrderString = generateOrderString(prevOrder, nextOrder);
 
-        if (gMovedIndex !== -1) {
-            const currentGoogleTasks = [...originalGoogleTasks];
-            const [movedItem] = currentGoogleTasks.splice(gMovedIndex, 1);
-            let insertIndex = 0;
-            if (targetPreviousId === null) {
-                insertIndex = 0;
-            } else {
-                const prevGoogleIndex = currentGoogleTasks.findIndex(t => t.id === targetPreviousId);
-                insertIndex = prevGoogleIndex !== -1 ? prevGoogleIndex + 1 : 0;
-            }
-            currentGoogleTasks.splice(insertIndex, 0, movedItem);
-
-            // Firestoreのキャッシュを更新 (これが onSnapshot 経由で UI を即座に更新する)
-            if (db) {
-                await setDoc(doc(db, "users", user.uid, "google_cache", "tasks"), {
-                    items: currentGoogleTasks,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-            }
-        }
-
+        // 1. オプティミスティック更新: StateとFirestoreのメタデータを即座に更新
+        // Stateの更新は `useEffect` がメタデータの変更を検知して行うが、即時性のため直接Firestoreを叩く
         try {
-            const res = await fetch("/api/tasks", {
+            const metaRef = doc(db, "users", user.uid, "tasks_metadata", taskId);
+            await setDoc(metaRef, {
+                order_string: newOrderString,
+                updated_at: new Date().toISOString()
+            }, { merge: true });
+        } catch (err) {
+            console.error("Failed to update order_string in metadata", err);
+            setError("並べ替えの保存に失敗しました");
+            return;
+        }
+
+        // 2. Google Tasks API へのベストエフォート同期（非同期で実行し待たない）
+        if (navigator.onLine) {
+            fetch("/api/tasks", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -520,27 +532,9 @@ export default function TaskList({ place }: { place: PlaceType }) {
                     "x-google-refresh-token": googleRefreshToken || ""
                 },
                 body: JSON.stringify({ id: taskId, previous: targetPreviousId })
+            }).catch(err => {
+                console.error("Background sync for Google Tasks order failed", err);
             });
-
-            if (!res.ok) throw new Error("Failed to move task");
-
-            // 並べ替えが成功したら、タイムスタンプを保存 (同期ロック用)
-            if (typeof window !== "undefined") {
-                localStorage.setItem("last_manual_move_at", Date.now().toString());
-            }
-
-            // イベントの反映(Eventual Consistency)待ちで syncData を呼ぶと古い順序に戻るため、
-            // ここでは syncData() は呼ばず、ローカルキャッシュの順序をそのまま活かす
-        } catch (err) {
-            console.error(err);
-            setError("移動に失敗しました");
-            // エラー時は元の順序に戻す
-            if (db) {
-                await setDoc(doc(db, "users", user.uid, "google_cache", "tasks"), {
-                    items: originalGoogleTasks,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-            }
         }
     };
     const renderTaskItem = (task: AppTask) => (
