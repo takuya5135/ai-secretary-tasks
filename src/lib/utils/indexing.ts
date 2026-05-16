@@ -9,8 +9,8 @@ export function generateOrderString(prev: string | null, next: string | null): s
 
     if (!prev && !next) return ALPHABET[Math.floor(ALPHABET.length / 2)];
 
-    let p = prev || '';
-    let n = next || '';
+    const p = prev || '';
+    const n = next || '';
 
     // padding with MIN_CHAR and mid-char if we need something smaller than next
     if (!p) {
@@ -41,7 +41,7 @@ export function generateOrderString(prev: string | null, next: string | null): s
     } else {
         // They are adjacent or pIndex >= nIndex (if prev > next). 
         // Assuming prev < next always, we append to p.
-        let remainingP = p.substring(i + 1);
+        const remainingP = p.substring(i + 1);
         if (!remainingP) {
             return p + ALPHABET[Math.floor(ALPHABET.length / 2)];
         }

@@ -46,9 +46,10 @@ export function useSync() {
             if (!db) {
                 throw new Error("Firestore is not initialized.");
             }
+            const firestoreDb = db;
 
             // 2. Metadataの取得と不足分の初期化
-            const metaQuery = await getDocs(collection(db, "users", user.uid, "tasks_metadata"));
+            const metaQuery = await getDocs(collection(firestoreDb, "users", user.uid, "tasks_metadata"));
             const metadataMap = new Map();
             let minOrderString: string | null = null;
 
@@ -62,8 +63,8 @@ export function useSync() {
                 }
             });
 
-            const tasksToInitialize: any[] = [];
-            let currentMinOrder = minOrderString;
+            const tasksToInitialize: Record<string, unknown>[] = [];
+            let currentMinOrder: string | null = minOrderString;
             let needsRebalance = false;
 
             // Googleから取得したタスクの順序は無視する。order_stringが無いタスクには、現在のリストの先頭(最小)よりも若い文字列を付与する
@@ -93,9 +94,9 @@ export function useSync() {
                 const CHUNK_SIZE = 400;
                 for (let i = 0; i < tasksToInitialize.length; i += CHUNK_SIZE) {
                     const chunk = tasksToInitialize.slice(i, i + CHUNK_SIZE);
-                    const batch = writeBatch(db);
+                    const batch = writeBatch(firestoreDb);
                     chunk.forEach(meta => {
-                        const metaRef = doc(db, "users", user.uid, "tasks_metadata", meta.google_task_id);
+                        const metaRef = doc(firestoreDb, "users", user.uid, "tasks_metadata", meta.google_task_id as string);
                         batch.set(metaRef, meta, { merge: true });
                     });
                     await batch.commit();
@@ -148,9 +149,9 @@ export function useSync() {
                         const CHUNK_SIZE = 400;
                         for (let i = 0; i < tasksToRebalance.length; i += CHUNK_SIZE) {
                             const chunk = tasksToRebalance.slice(i, i + CHUNK_SIZE);
-                            const batch = writeBatch(db);
+                            const batch = writeBatch(firestoreDb);
                             chunk.forEach(meta => {
-                                const metaRef = doc(db, "users", user.uid, "tasks_metadata", meta.google_task_id);
+                                const metaRef = doc(firestoreDb, "users", user.uid, "tasks_metadata", meta.google_task_id as string);
                                 batch.set(metaRef, {
                                     order_string: meta.order_string,
                                     updated_at: new Date().toISOString()
@@ -167,7 +168,7 @@ export function useSync() {
 
             // 4. Firestore にキャッシュ（上書き保存）
             // Google Tasks (並べ替えロックは不要になったためそのまま上書き)
-            const tasksRef = doc(db, "users", user.uid, "google_cache", "tasks");
+            const tasksRef = doc(firestoreDb, "users", user.uid, "google_cache", "tasks");
             await setDoc(tasksRef, {
                 items: tasksData.tasks || [],
                 updatedAt: new Date().toISOString()
@@ -175,7 +176,7 @@ export function useSync() {
             console.log("Sync complete: Google Tasks -> Firestore");
 
             // Google Calendar
-            const calendarRef = doc(db, "users", user.uid, "google_cache", "calendar");
+            const calendarRef = doc(firestoreDb, "users", user.uid, "google_cache", "calendar");
             await setDoc(calendarRef, {
                 events: calData.events || [],
                 updatedAt: new Date().toISOString()

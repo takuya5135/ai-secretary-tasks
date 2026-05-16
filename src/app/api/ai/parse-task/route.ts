@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 4. **文脈からの属性推測**: タイトルだけでなく、重要度、緊急度、場所（Home/Workなど）を前後の文脈から賢く推測してください。
 
 ユーザーのプロフィール情報: ${JSON.stringify(userProfile || {})}
+普段利用する店舗（買い物の場所）: ${JSON.stringify(shoppingLocations || [])}
 
 ### 出力フォーマット
 以下のプロパティを持つJSONオブジェクトの配列として出力してください:
